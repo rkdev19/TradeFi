@@ -4,7 +4,7 @@ import {
   Address,
   uint64,
   Asset,
-  PaymentTransaction
+  PaymentTxn
 } from '@algorandfoundation/algorand-typescript';
 
 export class TimedAuctionContract extends Contract {
@@ -29,7 +29,7 @@ export class TimedAuctionContract extends Contract {
     // Set auction end time based on current round + duration
     // Converting seconds to rounds (approximately 4.5 seconds per round)
     const roundsToAdd = Math.ceil(Number(auctionDurationSeconds) / 4.5);
-    this.auctionEndTime = this.txn.lastRound + BigInt(roundsToAdd);
+    this.auctionEndTime = this.txn.lastValid + BigInt(roundsToAdd);
   }
 
   @abimethod()
@@ -39,7 +39,7 @@ export class TimedAuctionContract extends Contract {
   }
 
   @abimethod()
-  optInToAsset(mbrpay: PaymentTransaction): void {
+  optInToAsset(mbrpay: PaymentTxn): void {
     this.assertSenderIsCreator();
 
     if (this.app.address.isOptedInToAsset(this.assetId)) {
@@ -59,8 +59,8 @@ export class TimedAuctionContract extends Contract {
   }
 
   @abimethod()
-  placeBid(bidPayment: PaymentTransaction): void {
-    if (this.txn.lastRound > this.auctionEndTime) {
+  placeBid(bidPayment: PaymentTxn): void {
+    if (this.txn.lastValid > this.auctionEndTime) {
       throw new Error("Auction has ended");
     }
 
@@ -85,7 +85,7 @@ export class TimedAuctionContract extends Contract {
 
   @abimethod()
   finalizeAuction(): void {
-    if (this.txn.lastRound <= this.auctionEndTime) {
+    if (this.txn.lastValid <= this.auctionEndTime) {
       throw new Error("Auction still in progress");
     }
 
