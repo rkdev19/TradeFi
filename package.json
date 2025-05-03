@@ -1,29 +1,22 @@
 {
   "name": "tradefi",
   "version": "1.0.0",
+  "description": "Algorand marketplace with auction functionalities",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "algorand",
+    "marketplace",
+    "auction"
+  ],
+  "author": "RahulHalli",
   "license": "ISC",
   "dependencies": {
     "@algorandfoundation/algokit-utils": "^9.0.1",
     "algosdk": "^3.2.0",
     "typescript": "^5.8.3"
   },
-
-  "devDependencies": {
-    "@types/node": "^22.15.2",
-    "ts-node": "^10.9.2"
-  },
-
-  "scripts": {
-    "build": "tsc",
-    "start": "ts-node examples/simple-marketplace.ts"
-  },
-
-  "description": ""
+  "devDependencies": {}
 }

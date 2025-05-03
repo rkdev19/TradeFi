@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 0.3.2
+_src_path: gh:algorandfoundation/algokit-typescript-template
+author_email: hallirahul777@gmail.com
+author_name: RahulScripts
+contract_name: timed_auction
+preset_name: starter
+project_name: algorand-marketplace
+
