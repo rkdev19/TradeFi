@@ -7,7 +7,12 @@ export { AuctionInfo, AssetInfo, AuctionCreateParams, BidParams, MarketplaceConf
 export { utils };
 
 /**
- * Creates a new marketplace client
+ * Creates a new marketplace client.
+ * 
+ * @param algodClient - The Algorand algod client for interacting with the blockchain.
+ * @param indexerClient - The Algorand indexer client for querying blockchain data.
+ * @param signer - The transaction signer responsible for signing transactions.
+ * @returns A new instance of the MarketplaceClient.
  */
 export function createMarketplaceClient(
   algodClient: algosdk.Algodv2,
