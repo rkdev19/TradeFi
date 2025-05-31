@@ -1,62 +1,68 @@
-import { Config } from '@algorandfoundation/algokit-utils'
-import { registerDebugEventHandlers } from '@algorandfoundation/algokit-utils-debug'
-import { consoleLogger } from '@algorandfoundation/algokit-utils/types/logging'
-import * as fs from 'node:fs'
-import * as path from 'node:path'
+import { Config } from '@algorandfoundation/algokit-utils';
+import { registerDebugEventHandlers } from '@algorandfoundation/algokit-utils-debug';
+import { consoleLogger } from '@algorandfoundation/algokit-utils/types/logging';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
-// Uncomment the traceAll option to enable auto generation of AVM Debugger compliant sourceMap and simulation trace file for all AVM calls.
-// Learn more about using AlgoKit AVM Debugger to debug your TEAL source codes and inspect various kinds of Algorand transactions in atomic groups -> https://github.com/algorandfoundation/algokit-avm-vscode-Debugger
-
+// Configure AlgoKit with enhanced logging and debugging
 Config.configure({
   logger: consoleLogger,
   debug: true,
-  //  traceAll: true,
-})
-registerDebugEventHandlers()
+});
 
-// base directory
-const baseDir = path.resolve(__dirname)
+registerDebugEventHandlers();
 
-// function to validate and dynamically import a module
+// Base directory for deployers
+const baseDir = path.resolve(__dirname);
+
+// Dynamically import deploy-config module if it exists
 async function importDeployerIfExists(dir: string) {
-  const deployerPath = path.resolve(dir, 'deploy-config')
-  if (fs.existsSync(deployerPath + '.ts') || fs.existsSync(deployerPath + '.js')) {
-    const deployer = await import(deployerPath)
-    return { ...deployer, name: path.basename(dir) }
+  const deployerPath = path.resolve(dir, 'deploy-config');
+  try {
+    if (await fs.stat(deployerPath + '.ts').catch(() => null) || await fs.stat(deployerPath + '.js').catch(() => null)) {
+      const deployer = await import(deployerPath);
+      return { ...deployer, name: path.basename(dir) };
+    }
+  } catch (error) {
+    console.error(`Error importing deploy-config from ${dir}:`, error);
   }
-  return null
+  return null;
 }
 
-// get a list of all deployers from the subdirectories
+// Retrieve all deployers from subdirectories
 async function getDeployers() {
-  const directories = fs
-    .readdirSync(baseDir, { withFileTypes: true })
-    .filter((dirent) => dirent.isDirectory())
-    .map((dirent) => path.resolve(baseDir, dirent.name))
-
-  const deployers = await Promise.all(directories.map(importDeployerIfExists))
-  return deployers.filter((deployer) => deployer !== null) // Filter out null values
+  try {
+    const directories = await fs.readdir(baseDir, { withFileTypes: true });
+    const deployers = await Promise.all(
+      directories
+        .filter((dirent) => dirent.isDirectory())
+        .map((dirent) => importDeployerIfExists(path.resolve(baseDir, dirent.name)))
+    );
+    return deployers.filter((deployer) => deployer !== null);
+  } catch (error) {
+    console.error('Error reading directories:', error);
+    return [];
+  }
 }
 
-// execute all the deployers
+// Execute deployers for specified contract or all
 (async () => {
-  const contractName = process.argv.length > 2 ? process.argv[2] : undefined
-  const contractDeployers = await getDeployers()
-  
-  const filteredDeployers = contractName
-    ? contractDeployers.filter(deployer => deployer.name === contractName)
-    : contractDeployers
+  const contractName = process.argv[2];
+  const contractDeployers = await getDeployers();
+  const deployersToExecute = contractName
+    ? contractDeployers.filter((deployer) => deployer.name === contractName)
+    : contractDeployers;
 
-  if (contractName && filteredDeployers.length === 0) {
-    console.warn(`No deployer found for contract name: ${contractName}`)
-    return
+  if (contractName && deployersToExecute.length === 0) {
+    console.warn(`No deployer found for contract name: ${contractName}`);
+    return;
   }
 
-  for (const deployer of filteredDeployers) {
+  for (const deployer of deployersToExecute) {
     try {
-      await deployer.deploy()
-    } catch (e) {
-      console.error(`Error deploying ${deployer.name}:`, e)
+      await deployer.deploy();
+    } catch (error) {
+      console.error(`Error deploying ${deployer.name}:`, error);
     }
   }
-})()
+})();
