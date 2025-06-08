@@ -1,4 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  Zap, 
+  Shield, 
+  Layers, 
+  ArrowRight, 
+  Play, 
+  Code, 
+  Globe,
+  Sparkles,
+  ChevronDown,
+  Mouse,
+  Star,
+  Rocket
+} from "lucide-react"
 
 // Interface based on your AuctionX smart contract fields
 interface AuctionTender {
@@ -252,15 +266,30 @@ const Tenders: React.FC = () => {
         <div className="container mx-auto px-6 py-6">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/25">
-                <span className="text-xl font-black text-white">T</span>
-              </div>
+               <div className="relative group">
+                 <div className="w-12 h-12 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-violet-500/25 transition-all duration-300">
+                   <Globe className="h-6 w-6 text-white" />
+                 </div>
+                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
+               </div>
               <div>
-                <h1 className="text-2xl font-black bg-gradient-to-r from-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
-                  TenderFi
-                </h1>
-                <p className="text-xs text-white/50 font-medium">Quantum Auction Platform</p>
+                 <span 
+                    className="text-3xl font-bold"
+                    style={{
+                      background: 'linear-gradient(to right, rgb(167 139 250), rgb(196 181 253), rgb(232 121 249))',
+                      WebkitBackgroundClip: 'text',
+                      backgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      color: 'transparent',
+                      display: 'inline-block'
+                    }}
+                  >
+                    Tenderfi
+                  </span>
+                <div className="text-xs text-muted-foreground font-mono">Web3 Smart Tenders</div>
               </div>
+              
+              
             </div>
 
             <div className="flex items-center space-x-4">
