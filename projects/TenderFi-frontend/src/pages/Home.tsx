@@ -40,19 +40,19 @@ const Index = () => {
     {
       icon: Shield,
       title: "Quantum Security",
-      description: "Military-grade encryption with quantum-resistant algorithms",
+      description: "Military-grade quantum-resistant protection",
       glow: "shadow-[0_0_40px_rgba(139,92,246,0.3)]"
     },
     {
       icon: Zap,
       title: "Lightning Speed",
-      description: "Sub-second transaction finality on Layer 1",
+      description: "Sub-second transaction finality",
       glow: "shadow-[0_0_40px_rgba(168,85,247,0.3)]"
     },
     {
       icon: Layers,
-      title: "Multi-Chain",
-      description: "Seamless interoperability across all blockchains",
+      title: "Instant Settlement",
+      description: "Automatic contract payments",
       glow: "shadow-[0_0_40px_rgba(192,132,252,0.3)]"
     }
   ];
@@ -116,7 +116,7 @@ const Index = () => {
                   >
                     Tenderfi
                   </span>
-                <div className="text-xs text-muted-foreground font-mono">Web3 Procurement</div>
+                <div className="text-xs text-muted-foreground font-mono">Web3 Smart Tenders</div>
               </div>
             </div>
             
@@ -143,7 +143,7 @@ const Index = () => {
           <div className="flex justify-center mb-8">
             <Badge className="backdrop-blur-xl bg-violet-500/10 border border-violet-500/20 text-violet-300 px-6 py-3 text-sm font-medium rounded-full hover:bg-violet-500/20 transition-all duration-300 group">
               <Star className="h-4 w-4 mr-2 group-hover:rotate-12 transition-transform duration-300" />
-              Next-Gen Blockchain Infrastructure
+              Powered by Algorand
               <Sparkles className="h-4 w-4 ml-2 group-hover:scale-110 transition-transform duration-300" />
             </Badge>
           </div>
@@ -172,23 +172,23 @@ const Index = () => {
           {/* Subtitle */}
           <div className="mb-16 animate-fade-in-delay">
             <p className="text-xl md:text-2xl text-gray-400 mb-8 max-w-5xl mx-auto leading-relaxed font-light">
-              Revolutionary quantum-secured blockchain platform transforming 
-              <span className="text-violet-400 font-semibold"> government procurement</span> with 
-              <span className="text-purple-400 font-semibold"> zero-knowledge proofs</span> and 
-              <span className="text-fuchsia-400 font-semibold"> AI-powered smart contracts</span>
+              End-to-end procurement platform revolutionizing 
+              <span className="text-violet-400 font-semibold"> public tenders</span> with 
+              <span className="text-purple-400 font-semibold">  transparent auctions, smart contract automation</span> and 
+              <span className="text-fuchsia-400 font-semibold"> instant payment settlements</span> on Algorand's carbon-negative Blockchain.
             </p>
           </div>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-6 justify-center mb-20 animate-scale-in-delay">
-            <Button className="bg-black hover:bg-gray-900 text-white px-12 py-6 text-lg font-semibold rounded-2xl border border-white/10 hover:border-white/20 group transition-all duration-300 shadow-lg hover:shadow-xl">
-              <Rocket className="h-6 w-6 mr-3 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300" />
-              Launch Platform
+            <Button className="bg-black hover:bg-gray-900 text-white px-12 py-6 text-lg font-semibold rounded-2xl border border-white/10 hover:border-white/20 group transition-all duration-300 shadow-lg hover:shadow-xl" onClick={toggleWalletModal} >
+              <Rocket className="h-6 w-6 mr-3 group-hover:scale-110 group-hover:-rotate-12 transition-all duration-300" data-test-id="connect-wallet"  /> {activeAddress ? "Wallet Conneted" : "Connect Wallet"}
+              
               <ArrowRight className="h-6 w-6 ml-3 group-hover:translate-x-1 transition-transform duration-300" />
             </Button>
             <Button variant="outline" className="backdrop-blur-xl bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20 px-12 py-6 text-lg font-semibold rounded-2xl group transition-all duration-300">
-              <Code className="h-6 w-6 mr-3 group-hover:scale-110 transition-transform duration-300" />
-              View Documentation
+              <Code className="h-6 w-6 mr-3 group-hover:scale-110 transition-transform duration-300"  />
+              < a href="#features"> View Features </a>
             </Button>
           </div>
 
@@ -214,10 +214,10 @@ const Index = () => {
                     display: 'inline-block'
                   }}
                 >
-                  Quantum-Powered Features
+                 Algorand-Powered Features
                 </h2>
             <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              Built with cutting-edge technology for the next decade of Web3 innovation
+               Enterprise-grade blockchain infrastructure for mission-critical procurement
             </p>
           </div>
 
@@ -258,14 +258,11 @@ const Index = () => {
               Join the quantum revolution in public sector blockchain technology and experience the future of transparent governance
             </p>
             <div className="flex flex-col sm:flex-row gap-6 justify-center">
-              <Button className="bg-black hover:bg-gray-900 text-white px-10 py-4 text-lg font-semibold rounded-2xl border border-white/10 hover:border-white/20 group transition-all duration-300">
-                Start Building
+              <Button onClick={toggleWalletModal} className="bg-black hover:bg-gray-900 text-white px-10 py-4 text-lg font-semibold rounded-2xl border border-white/10 hover:border-white/20 group transition-all duration-300 ">
+                {activeAddress ? "Wallet Conneted" : "Connect Wallet"}
                 <ArrowRight className="h-5 w-5 ml-3 group-hover:translate-x-1 transition-transform duration-300" />
               </Button>
-              <Button variant="outline" className="backdrop-blur-xl bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20 px-10 py-4 text-lg font-semibold rounded-2xl group transition-all duration-300">
-                <Mouse className="h-5 w-5 mr-3 group-hover:scale-110 transition-transform duration-300" />
-                Interactive Demo
-              </Button>
+              
             </div>
           </div>
         </div>
