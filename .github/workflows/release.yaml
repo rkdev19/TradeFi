@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - '.vscode/**'
+      - '.idea/**'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  TenderFi-contracts-validate:
+    name: Run TenderFi-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/TenderFi-contracts-ci.yaml
+
+  TenderFi-contracts-release:
+    name: Run TenderFi-contracts release
+    secrets: inherit
+    uses: ./.github/workflows/TenderFi-contracts-cd.yaml
+    needs: TenderFi-contracts-validate
+
+  TenderFi-frontend-validate:
+    name: Run TenderFi-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/TenderFi-frontend-ci.yaml
+
+  TenderFi-frontend-release:
+    name: Run TenderFi-frontend release
+    secrets: inherit
+    uses: ./.github/workflows/TenderFi-frontend-cd.yaml
+    needs: TenderFi-frontend-validate

@@ -1,0 +1,152 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 2%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 270 91% 65%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 280 100% 70%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 6%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 290 100% 75%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 270 91% 65%;
+    --radius: 1rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground overflow-x-hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+    cursor: none;
+  }
+  
+  h1, h2, h3 {
+    font-family: 'Orbitron', 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+}
+
+/* Advanced Animations */
+@keyframes mesh-1 {
+  0%, 100% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+  33% { transform: translate(3%, -2%) rotate(1deg) scale(1.05); }
+  66% { transform: translate(-2%, 3%) rotate(-1deg) scale(0.95); }
+}
+
+@keyframes mesh-2 {
+  0%, 100% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+  33% { transform: translate(-3%, 2%) rotate(-1deg) scale(0.95); }
+  66% { transform: translate(2%, -3%) rotate(1deg) scale(1.05); }
+}
+
+@keyframes mesh-3 {
+  0%, 100% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+  50% { transform: translate(1%, 1%) rotate(0.5deg) scale(1.02); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  33% { transform: translateY(-20px) translateX(10px) rotate(2deg); }
+  66% { transform: translateY(10px) translateX(-5px) rotate(-1deg); }
+}
+
+@keyframes float-medium {
+  0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  50% { transform: translateY(-15px) translateX(-10px) rotate(-2deg); }
+}
+
+@keyframes float-fast {
+  0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
+  25% { transform: translateY(-10px) translateX(5px) rotate(1deg); }
+  75% { transform: translateY(5px) translateX(-8px) rotate(-1deg); }
+}
+
+@keyframes slide-down {
+  from { 
+    opacity: 0; 
+    transform: translateY(-30px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slide-up {
+  from { 
+    opacity: 0; 
+    transform: translateY(30px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes fade-in-delay {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes scale-in-delay {
+  from { 
+    opacity: 0; 
+    transform: scale(0.9); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+@keyframes bounce-slow {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  60% { transform: translateY(-5px); }
+}
+
+.animate-mesh-1 { animation: mesh-1 25s ease-in-out infinite; }
+.animate-mesh-2 { animation: mesh-2 30s ease-in-out infinite; }
+.animate-mesh-3 { animation: mesh-3 35s ease-in-out infinite; }
+.animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
+.animate-float-medium { animation: float-medium 6s ease-in-out infinite; }
+.animate-float-fast { animation: float-fast 4s ease-in-out infinite; }
+.animate-slide-down { animation: slide-down 1s ease-out; }
+.animate-slide-up { animation: slide-up 1s ease-out 0.2s both; }
+.animate-slide-down-delay { animation: slide-down 1s ease-out 0.4s both; }
+.animate-fade-in-delay { animation: fade-in-delay 1s ease-out 0.6s both; }
+.animate-scale-in-delay { animation: scale-in-delay 1s ease-out 0.8s both; }
+.animate-bounce-slow { animation: bounce-slow 3s ease-in-out infinite; }

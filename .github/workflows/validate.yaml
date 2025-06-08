@@ -1,0 +1,14 @@
+name: Pull Request validation
+
+on: [pull_request]
+
+
+jobs:
+  TenderFi-contracts-ci:
+    name: Run TenderFi-contracts validation
+    uses: ./.github/workflows/TenderFi-contracts-ci.yaml
+
+  TenderFi-frontend-ci:
+    name: Run TenderFi-frontend validation
+    uses: ./.github/workflows/TenderFi-frontend-ci.yaml
+

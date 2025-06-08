@@ -1,154 +1,97 @@
-# TradeFi
+# **AuctionX - Asset Auction Platform on Algorand**  
 
-**TradeFi** is a TypeScript/JavaScript package designed to accelerate the development of auction-based marketplaces on the Algorand blockchain. It provides high-level, developer-friendly APIs to manage assets (ASAs) and timed auctions using smart contracts, making it easy to integrate blockchain-based auction functionality into your dApps.
-
----
-
-## 🚀 Features
-
-- Create and manage Algorand Standard Assets (ASAs)
-- Initialize and manage timed auction smart contracts
-- Place bids, finalize auctions, accept/reject bids
-- Easily fetch auction details and active auction listings
-- Powered by Algorand SDK and `algokit-utils`
+**AuctionX** is a **decentralized auction platform** built with **AlgoKit**, enabling secure, on-chain auctions for **any Algorand Standard Asset (ASA)**—NFTs, tokens, or real-world asset representations.  
 
 ---
 
-## 📦 Installation
+## **🚀 Quick Start with AlgoKit**  
 
+### **1. Initialize Project**  
+Clone the repository and navigate to the project directory:  
 ```bash
-npm install tradefi
-# or
-yarn add tradefi
+cd AuctionX
 ```
+Run this command to bootstrap **both frontend (React/Vite) and contracts (Algorand Python)**:  
+```bash
+algokit project bootstrap all
+```  
+
+### **2. Install Dependencies**  
+```bash
+npm install
+```  
+
+### **3. Configure Environment**  
+Create `.env` in the project root:  
+```env
+VITE_ALGOD_NETWORK=testnet
+VITE_ALGOD_SERVER=https://testnet-api.algonode.cloud
+VITE_ALGOD_TOKEN=
+
+VITE_INDEXER_TOKEN=""
+VITE_INDEXER_SERVER="https://testnet-idx.algonode.cloud"
+VITE_INDEXER_PORT=""
+
+```  
+
+### **4. Run Development Server**  
+```bash
+npm run dev
+```  
 
 ---
 
-## 🛠️ Usage
-
-### 1. Initialize the Client
-
-```ts
-import algosdk from 'algosdk';
-import { MarketplaceClient } from 'tradefi';
-
-const algod = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '');
-const indexer = new algosdk.Indexer('', 'https://testnet-idx.algonode.cloud', '');
-const signer = async (txns: algosdk.Transaction[], indexes: number[]) => {
-  // implement your signer logic (e.g. wallet connection)
-};
-
-const marketplace = new MarketplaceClient(algod, indexer, signer);
-```
+## **🔧 Key Features**  
+✅ **AlgoKit-Powered** – Full-stack Algorand app (React + Algorand Python)  
+✅ **Multi-Asset Auctions** – NFTs, tokens, or real-world assets  
+✅ **Secure Escrow** – On-chain asset locking  
+✅ **Wallet Support** – Pera, Defly, Exodus  
 
 ---
 
-### 2. Asset Management
+## **📜 Smart Contracts (Algorand Python)**  
+Contracts are pre-configured in `/contracts` with:  
+- **Auction Manager** – Handles bidding logic  
+- **Asset Escrow** – Secures assets until auction ends  
 
-#### Create ASA
+**Deploy contracts:**  
 
-```ts
-const assetId = await marketplace.createAsset(
-  creatorAddress,
-  'MyToken',
-  'MTK',
-  1000,
-  0
-);
-```
-
-#### Opt-in to Asset
-
-```ts
-await marketplace.optInToAsset(accountAddress, assetId);
-```
-
-#### Transfer Asset
-
-```ts
-await marketplace.transferAsset(sender, receiver, assetId, 1);
-```
-
-#### Get Asset Info
-
-```ts
-const info = await marketplace.getAssetInfo(assetId);
-```
+You can deploy the contracts using Lora to test the functionality.
+ 
 
 ---
 
-### 3. Auction Management
 
-#### Create Auction
-
-```ts
-const appId = await marketplace.auction.createAuction({
-  creator: creatorAddress,
-  assetId: assetId,
-  floorPrice: 1000000, // in microAlgos
-  durationInSeconds: 300
-});
-```
-
-#### Place Bid
-
-```ts
-await marketplace.auction.placeBid({
-  appId,
-  bidder: bidderAddress,
-  bidAmount: 1500000
-});
-```
-
-#### Finalize Auction
-
-```ts
-await marketplace.auction.finalizeAuction(appId, senderAddress);
-```
-
-#### Accept / Reject Bid
-
-```ts
-await marketplace.auction.acceptBid(appId, creatorAddress);
-await marketplace.auction.rejectBid(appId, creatorAddress);
-```
-
-#### Get Auction Info
-
-```ts
-const auction = await marketplace.auction.getAuctionInfo(appId);
-```
-
-#### List Active Auctions
-
-```ts
-const activeAuctions = await marketplace.auction.listActiveAuctions();
-```
 
 ---
 
-## 📘 Types
+## **🔗 Wallet Integration**  
+**Supported Wallets:**  
+- Pera Wallet  
+- Defly Wallet  
+- Exodus  
 
-Types used throughout the SDK are defined under `types/` and include:
-
----
-
-## ✅ Requirements
-
-- Node.js 16+
-- Algorand Smart Contracts deployed (via `algokit` or custom)
-- Signer function that signs Algorand transactions
-
----
-
-## 🧪 Testing
-
-You can test the SDK against Algorand TestNet using your test accounts and a deployed version of the timed auction smart contract.
+**How to Connect:**  
+1. Click **"Connect Wallet"**  
+2. Select your wallet  
+3. Approve the connection  
 
 ---
 
-## 🤝 Contributing
-
-Pull requests and feedback are welcome! If you want to contribute a feature, fix, or enhancement, feel free to open an issue or PR.
+## **📜 License**  
+**MIT License** – Open source and free to use.  
 
 ---
+
+## **Need Help?**  
+- [Algorand Developer Portal](https://dev.algorand.co/)  
+- Open a **GitHub Issue**  
+
+---
+
+**Start building auctions in minutes!** 🚀  
+```bash
+algokit init
+```  
+
+Built with **AlgoKit** for seamless Algorand development. ⚡
