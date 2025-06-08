@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import { Buffer } from 'buffer'
 import './index.css'
 
+
 window.global = window
 window.Buffer = Buffer
 

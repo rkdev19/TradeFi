@@ -1,6 +1,8 @@
 import { SupportedWallet, WalletId, WalletManager, WalletProvider } from '@txnlab/use-wallet-react'
+import {CursorProvider} from "./components/CursorProvider"
 import { SnackbarProvider } from 'notistack'
-import Home from './pages/Home'
+import Home from './pages/Home' 
+import Tenders from './pages/Tenders' 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
 import { Toaster } from "./components/ui/toaster"
 import { ThemeProvider } from "./components/ThemeProvider"
@@ -50,6 +52,7 @@ export default function App() {
   })
 
   return (
+   <CursorProvider>
     <SnackbarProvider maxSnack={3}>
       <WalletProvider manager={walletManager}>
       <ThemeProvider defaultTheme="dark" storageKey="auction-x-theme">
@@ -59,7 +62,7 @@ export default function App() {
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Home />} />
-              
+              <Route path="/tenders" element={<Tenders />} />
             </Routes>
           </main>
          
@@ -69,5 +72,6 @@ export default function App() {
     </ThemeProvider>
       </WalletProvider>
     </SnackbarProvider>
+   </CursorProvider>
   )
 }
