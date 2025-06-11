@@ -1,6 +1,5 @@
-import * as algokit from "@algorandfoundation/algokit-utils";
-import { AuctionXClient, AuctionXFactory } from "./contracts/AuctionX";
-import { TransactionSigner } from "algosdk";
+import { TransactionSigner } from 'algosdk'
+import { AuctionXClient } from './contracts/TenderFi'
 
 export function createAuction(
   client: AuctionXClient,
@@ -10,7 +9,5 @@ export function createAuction(
   minBidIncrement: number,
   minBidAmount: number,
   maxBidAmount: number,
-  transactionSigner: TransactionSigner
-) {
-  
-}
+  transactionSigner: TransactionSigner,
+) {}

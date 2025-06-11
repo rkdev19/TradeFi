@@ -1,9 +1,9 @@
 {
-  "name": "AuctionX-frontend",
+  "name": "TenderFi-frontend",
   "version": "0.1.0",
   "author": {
-    "name": "maroti",
-    "email": "vaibhavspatre@gmail.com"
+    "name": "Ritesh",
+    "email": "riteshkatore2005@gmail.com"
   },
   "private": true,
   "type": "module",
