@@ -54,7 +54,7 @@ const Tenders: React.FC = () => {
     if (!addr) return ""
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`
   }
-  
+
   const [tenders, setTenders] = useState<AuctionTender[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTender, setSelectedTender] = useState<AuctionTender | null>(null);
@@ -384,7 +384,7 @@ const Tenders: React.FC = () => {
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
                 {activeAddress ? formatAddress(activeAddress) : "Connect Wallet"}
               </Button>
-              
+
             </div>
           </div>
         </div>
@@ -434,7 +434,7 @@ const Tenders: React.FC = () => {
               <option value="Construction">Construction</option>
               <option value="It Services">IT Services</option>
               <option value="Health Carer">Healthcare</option>
-              
+
             </select>
             <select 
               value={sortBy} 
@@ -671,7 +671,7 @@ const Tenders: React.FC = () => {
                   <option value="Construction" className="bg-gray-900 text-white">Construction</option>
                   <option value="IT Services" className="bg-gray-900 text-white">IT Services</option>
                   <option value="Healthcare" className="bg-gray-900 text-white">Healthcare</option>
-                  
+
                 </select>
               </div>
 
