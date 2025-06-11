@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
+import { useWallet } from "@txnlab/use-wallet-react";
+import ConnectWallet from "../components/ConnectWallet";
 import { 
   Zap, 
   Shield, 
@@ -39,12 +42,34 @@ interface WalletState {
 }
 
 const Tenders: React.FC = () => {
+
+  const [openWalletModal, setOpenWalletModal] = useState(false)
+  const { activeAddress } = useWallet()
+
+  const toggleWalletModal = () => {
+    setOpenWalletModal(!openWalletModal)
+  }
+
+  const formatAddress = (addr: string) => {
+    if (!addr) return ""
+    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`
+  }
+  
   const [tenders, setTenders] = useState<AuctionTender[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTender, setSelectedTender] = useState<AuctionTender | null>(null);
   const [bidAmount, setBidAmount] = useState('');
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [newTenderForm, setNewTenderForm] = useState({
+    assetId: '',
+    assetName: '',
+    assetImage: '',
+    floorPrice: '',
+    description: '',
+    category: 'NFT',
+    endTime: ''
+  });
   const [wallet, setWallet] = useState<WalletState>({
     connected: false,
     address: '',
@@ -59,64 +84,64 @@ const Tenders: React.FC = () => {
       id: '1',
       appId: 123456,
       assetId: 789012,
-      assetName: 'Quantum Digital Asset #001',
+      assetName: 'Port Infrastructure',
       assetImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400',
       floorPrice: 1000000, // 1 ALGO
       highestBid: 2500000, // 2.5 ALGO
       highestBidder: 'ABCD...XYZ',
       creator: 'CREATOR...123',
-      description: 'Revolutionary quantum-encrypted digital artwork with immutable blockchain verification',
+      description: 'Expansion and modernization of port facilities including container terminals etc',
       endTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
       status: 'active',
-      category: 'NFT',
+      category: 'Infrastructure',
       bidsCount: 12
     },
     {
       id: '2',
       appId: 123457,
       assetId: 789013,
-      assetName: 'Future Collectible Token',
+      assetName: 'Telemedicine Platform ',
       assetImage: 'https://images.unsplash.com/photo-1634973357973-f2ed2657db3c?w=400',
       floorPrice: 500000, // 0.5 ALGO
       highestBid: 1800000, // 1.8 ALGO
       highestBidder: 'EFGH...ABC',
       creator: 'CREATOR...456',
-      description: 'Next-generation collectible with advanced utility features and quantum security',
+      description: 'Development and implementation of telemedicine solutions for remote healthcare delivery',
       endTime: new Date(Date.now() + 12 * 60 * 60 * 1000),
       status: 'active',
-      category: 'Collectible',
+      category: 'Health Care',
       bidsCount: 8
     },
     {
       id: '3',
       appId: 123458,
       assetId: 789014,
-      assetName: 'Neural Art Genesis',
+      assetName: 'Digital India Platform',
       assetImage: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400',
       floorPrice: 2000000, // 2 ALGO
       highestBid: 0, // No bids yet
       highestBidder: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ',
       creator: 'CREATOR...789',
-      description: 'AI-generated masterpiece with neural network authentication and blockchain provenance',
+      description: 'Development and maintenance of government digital platforms, e-governance solutions',
       endTime: new Date(Date.now() + 48 * 60 * 60 * 1000),
       status: 'active',
-      category: 'Art',
+      category: 'It Servicesr',
       bidsCount: 0
     },
     {
       id: '4',
       appId: 123459,
       assetId: 789015,
-      assetName: 'Holographic Memory Card',
+      assetName: 'Over Bridge',
       assetImage: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=400',
       floorPrice: 3000000, // 3 ALGO
       highestBid: 4200000, // 4.2 ALGO
       highestBidder: 'IJKL...DEF',
       creator: 'CREATOR...012',
-      description: 'Rare holographic collectible with embedded quantum memory storage',
+      description: 'Over Brifge for ABC Railway Crossing',
       endTime: new Date(Date.now() + 6 * 60 * 60 * 1000),
       status: 'active',
-      category: 'Collectible',
+      category: 'Construction',
       bidsCount: 15
     }
   ];
@@ -227,6 +252,60 @@ const Tenders: React.FC = () => {
     }
   };
 
+  // Handle form input changes
+  const handleFormChange = (field: string, value: string) => {
+    setNewTenderForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Submit new tender
+  const submitNewTender = async () => {
+    const { assetId, assetName, assetImage, floorPrice, description, category, endTime } = newTenderForm;
+
+    if (!assetId || !assetName || !floorPrice || !description || !endTime) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    const newTender: AuctionTender = {
+      id: Date.now().toString(),
+      appId: parseInt(assetId) + 1000,
+      assetId: parseInt(assetId),
+      assetName,
+      assetImage: assetImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400',
+      floorPrice: parseFloat(floorPrice) * 1000000, // Convert to microAlgos
+      highestBid: 0,
+      highestBidder: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ',
+      creator: wallet.address,
+      description,
+      endTime: new Date(endTime),
+      status: 'active',
+      category,
+      bidsCount: 0
+    };
+
+    try {
+      // Add new tender to the list
+      setTenders(prev => [...prev, newTender]);
+
+      // Reset form and close modal
+      setNewTenderForm({
+        assetId: '',
+        assetName: '',
+        assetImage: '',
+        floorPrice: '',
+        description: '',
+        category: 'NFT',
+        endTime: ''
+      });
+      setCreateModalOpen(false);
+
+      alert('Tender created successfully!');
+    } catch (error) {
+      console.error('Error creating tender:', error);
+      alert('Error creating tender. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
@@ -288,8 +367,6 @@ const Tenders: React.FC = () => {
                   </span>
                 <div className="text-xs text-muted-foreground font-mono">Web3 Smart Tenders</div>
               </div>
-              
-              
             </div>
 
             <div className="flex items-center space-x-4">
@@ -299,10 +376,15 @@ const Tenders: React.FC = () => {
               >
                 + Create Tender
               </button>
-              <div className="flex items-center space-x-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3">
+              <Button 
+                onClick={toggleWalletModal}
+                className="bg-black hover:bg-gray-900 text-white border border-white/10 hover:border-white/20 transition-all duration-300"
+                data-test-id="connect-wallet"
+              >
                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
-                <span className="text-sm font-medium text-white/90">{wallet.address}</span>
-              </div>
+                {activeAddress ? formatAddress(activeAddress) : "Connect Wallet"}
+              </Button>
+              
             </div>
           </div>
         </div>
@@ -312,8 +394,19 @@ const Tenders: React.FC = () => {
       <main className="relative z-10 container mx-auto px-6 py-12">
         {/* Hero Section */}
         <div className="text-center mb-16">
-          <h2 className="text-6xl font-black bg-gradient-to-r from-white via-purple-200 to-fuchsia-200 bg-clip-text text-transparent mb-6 leading-tight">
-            Quantum Auction Tenders
+
+          <h2 
+            className="text-6xl font-black mb-6 leading-tight animate-slide-up"
+            style={{
+              background: 'linear-gradient(to right, rgb(255 255 255), rgb(196 181 253), rgb(240 171 252))',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+              display: 'block'
+            }}
+          >
+             Auction Tenders
           </h2>
           <p className="text-xl text-white/70 max-w-3xl mx-auto leading-relaxed">
             Experience the future of decentralized auctions with quantum-level security and lightning-fast transactions on Algorand blockchain.
@@ -334,17 +427,19 @@ const Tenders: React.FC = () => {
             <select 
               value={filter} 
               onChange={(e) => setFilter(e.target.value)}
-              className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+              className="w-full bg-gray-900/90 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
             >
               <option value="all">All Categories</option>
-              <option value="nft">NFTs</option>
-              <option value="art">Digital Art</option>
-              <option value="collectible">Collectibles</option>
+              <option value="Infrastructure">Infrastructure</option>
+              <option value="Construction">Construction</option>
+              <option value="It Services">IT Services</option>
+              <option value="Health Carer">Healthcare</option>
+              
             </select>
             <select 
               value={sortBy} 
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+              className="w-full bg-gray-900/90 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
             >
               <option value="ending-soon">Ending Soon</option>
               <option value="highest-bid">Highest Bid</option>
@@ -516,30 +611,91 @@ const Tenders: React.FC = () => {
 
             <div className="space-y-6">
               <div>
-                <label className="block text-white font-medium mb-2">Asset ID</label>
+                <label className="block text-white font-medium mb-2">Asset ID *</label>
                 <input
                   type="number"
+                  value={newTenderForm.assetId}
+                  onChange={(e) => handleFormChange('assetId', e.target.value)}
                   className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                   placeholder="Enter Asset ID"
+                  required
                 />
               </div>
 
               <div>
-                <label className="block text-white font-medium mb-2">Floor Price (ALGO)</label>
+                <label className="block text-white font-medium mb-2">Asset Name *</label>
+                <input
+                  type="text"
+                  value={newTenderForm.assetName}
+                  onChange={(e) => handleFormChange('assetName', e.target.value)}
+                  className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Enter asset name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Asset Image URL</label>
+                <input
+                  type="url"
+                  value={newTenderForm.assetImage}
+                  onChange={(e) => handleFormChange('assetImage', e.target.value)}
+                  className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  placeholder="https://example.com/image.jpg (optional)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Floor Price (ALGO) *</label>
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
+                  value={newTenderForm.floorPrice}
+                  onChange={(e) => handleFormChange('floorPrice', e.target.value)}
                   className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Minimum bid amount"
+                  placeholder="Enter minimum bid amount"
+                  required
                 />
               </div>
 
               <div>
-                <label className="block text-white font-medium mb-2">Description</label>
+                <label className="block text-white font-medium mb-2">Category *</label>
+                <select
+                  value={newTenderForm.category}
+                  onChange={(e) => handleFormChange('category', e.target.value)}
+                  className="w-full bg-gray-900/90 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  required
+                >
+                  <option value="Infrastructure" className="bg-gray-900 text-white">Infrastructure</option>
+                  <option value="Construction" className="bg-gray-900 text-white">Construction</option>
+                  <option value="IT Services" className="bg-gray-900 text-white">IT Services</option>
+                  <option value="Healthcare" className="bg-gray-900 text-white">Healthcare</option>
+                  
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">Description *</label>
                 <textarea
-                  rows={4}
+                  value={newTenderForm.description}
+                  onChange={(e) => handleFormChange('description', e.target.value)}
                   className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 resize-none"
                   placeholder="Describe your asset..."
+                  rows={3}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-white font-medium mb-2">End Time *</label>
+                <input
+                  type="datetime-local"
+                  value={newTenderForm.endTime}
+                  onChange={(e) => handleFormChange('endTime', e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="w-full bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  required
                 />
               </div>
 
@@ -551,6 +707,7 @@ const Tenders: React.FC = () => {
                   Cancel
                 </button>
                 <button
+                  onClick={submitNewTender}
                   className="flex-1 bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:from-purple-600 hover:to-fuchsia-600 text-white font-semibold py-3 rounded-xl transition-all duration-300 hover:scale-105"
                 >
                   Create Tender
@@ -561,32 +718,29 @@ const Tenders: React.FC = () => {
         </div>
       )}
 
+      {/* Floating Action Button for Mobile */}
+      <div className="fixed bottom-6 right-6 z-40 lg:hidden">
+        <button 
+          onClick={() => setCreateModalOpen(true)}
+          className="w-14 h-14 bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:from-purple-600 hover:to-fuchsia-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-purple-500/25 transition-all duration-300 hover:scale-110"
+        >
+          <span className="text-white text-2xl font-bold">+</span>
+        </button>
+      </div>
+
       <style jsx>{`
-        .bg-grid-pattern {
-          background-image: 
-            linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-          background-size: 50px 50px;
-        }
-
-        .animate-slide-up {
-          animation: slideUp 0.6s ease-out forwards;
-          opacity: 0;
-          transform: translateY(30px);
-        }
-
-        .animate-scale-in {
-          animation: scaleIn 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
           to {
             opacity: 1;
             transform: translateY(0);
           }
         }
 
-        @keyframes scaleIn {
+        @keyframes scale-in {
           from {
             opacity: 0;
             transform: scale(0.9);
@@ -595,6 +749,21 @@ const Tenders: React.FC = () => {
             opacity: 1;
             transform: scale(1);
           }
+        }
+
+        .animate-slide-up {
+          animation: slide-up 0.6s ease-out forwards;
+        }
+
+        .animate-scale-in {
+          animation: scale-in 0.3s ease-out forwards;
+        }
+
+        .bg-grid-pattern {
+          background-image: 
+            linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+          background-size: 50px 50px;
         }
 
         .line-clamp-2 {

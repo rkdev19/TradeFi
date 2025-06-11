@@ -122,7 +122,7 @@ const Index = () => {
             
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-muted-foreground hover:text-white transition-colors duration-300 text-sm font-medium">Features</a>
-              <a href="#demo" className="text-muted-foreground hover:text-white transition-colors duration-300 text-sm font-medium">Demo</a>
+              <a href="/tenders" className="text-muted-foreground hover:text-white transition-colors duration-300 text-sm font-medium">Demo</a>
               <Button 
                 onClick={toggleWalletModal}
                 className="bg-black hover:bg-gray-900 text-white border border-white/10 hover:border-white/20 transition-all duration-300"
@@ -290,7 +290,7 @@ const Index = () => {
             </span>
           </div>
           <p className="text-gray-500 mb-6 font-mono text-sm">
-            {"// Building the future of decentralized procurement"}
+            {"Powred by Algorand"}
           </p>
           <div className="flex justify-center space-x-8 text-sm text-gray-400">
             <a href="#" className="hover:text-violet-400 transition-colors duration-300">Privacy</a>
@@ -299,7 +299,7 @@ const Index = () => {
             <a href="#" className="hover:text-violet-400 transition-colors duration-300">GitHub</a>
           </div>
           <div className="mt-8 pt-8 border-t border-white/5 text-xs text-gray-500 font-mono">
-            <p>© 2025 Tenderfi Protocol. Quantum-secured by design.</p>
+            <p>© 2025 Tenderfi</p>
           </div>
         </div>
       </footer>
