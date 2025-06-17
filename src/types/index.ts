@@ -1,10 +1,4 @@
-import algosdk from 'algosdk';
-
-export interface MarketplaceConfig {
-  algodClient: algosdk.Algodv2;
-  indexerClient: algosdk.Indexer;
-  signer: algosdk.TransactionSigner;
-}
+// Enhanced types for the TradeFi SDK with escrow support
 
 export interface AuctionInfo {
   appId: number;
@@ -12,29 +6,126 @@ export interface AuctionInfo {
   floorPrice: number;
   highestBid: number;
   highestBidder: string;
-  endTime: number;
-  isActive: boolean;
+  auctionEndTime: number;
   creator: string;
+  // New escrow fields
+  totalEscrowedAmount: number;
+  activeBiddersCount: number;
+  isEscrowActive: boolean;
 }
 
-export interface AuctionCreateParams {
+export interface BidderEscrowInfo {
+  bidder: string;
+  escrowedAmount: number;
+  isHighestBidder: boolean;
+}
+
+export interface EscrowStatus {
+  totalEscrowedAmount: number;
+  activeBiddersCount: number;
+  isEscrowActive: boolean;
+}
+
+export interface CreateAuctionParams {
   creator: string;
   assetId: number;
   floorPrice: number;
   durationInSeconds: number;
 }
 
-export interface BidParams {
+export interface PlaceBidParams {
   appId: number;
   bidder: string;
   bidAmount: number;
 }
 
-export interface AssetInfo {
-  id: number;
-  name: string;
-  url?: string;
-  totalSupply: number;
-  decimals: number;
-  creator: string;
+export interface WithdrawBidParams {
+  appId: number;
+  bidder: string;
+}
+
+// Enhanced MarketplaceClient interface
+export interface AuctionClient {
+  // Existing methods
+  createAuction(params: CreateAuctionParams): Promise<number>;
+  placeBid(params: PlaceBidParams): Promise<void>;
+  finalizeAuction(appId: number, sender: string): Promise<void>;
+  acceptBid(appId: number, creator: string): Promise<void>;
+  rejectBid(appId: number, creator: string): Promise<void>;
+  getAuctionInfo(appId: number): Promise<AuctionInfo>;
+  listActiveAuctions(): Promise<AuctionInfo[]>;
+  
+  // New escrow methods
+  withdrawBid(params: WithdrawBidParams): Promise<void>;
+  getBidderEscrow(appId: number, bidder: string): Promise<number>;
+  getEscrowStatus(appId: number): Promise<EscrowStatus>;
+  refundAllBidders(appId: number, creator: string): Promise<void>;
+  
+  // Utility methods
+  canWithdrawBid(appId: number, bidder: string): Promise<boolean>;
+  getAllBidderEscrows(appId: number): Promise<BidderEscrowInfo[]>;
+}
+
+// Error types for better error handling
+export class AuctionError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public appId?: number
+  ) {
+    super(message);
+    this.name = 'AuctionError';
+  }
+}
+
+export class EscrowError extends AuctionError {
+  constructor(message: string, appId?: number) {
+    super(message, 'ESCROW_ERROR', appId);
+    this.name = 'EscrowError';
+  }
+}
+
+// Constants for the enhanced contract
+export const AUCTION_CONSTANTS = {
+  ZERO_ADDRESS: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+  DEFAULT_FEE: 1000,
+  SECONDS_PER_ROUND: 4.5,
+  MIN_BID_INCREMENT: 1, // microAlgos
+} as const;
+
+// Event types for tracking auction activities
+export interface AuctionEvent {
+  type: 'BID_PLACED' | 'BID_WITHDRAWN' | 'AUCTION_FINALIZED' | 'BID_ACCEPTED' | 'BID_REJECTED';
+  appId: number;
+  txId: string;
+  timestamp: number;
+  details: Record<string, any>;
+}
+
+export interface BidPlacedEvent extends AuctionEvent {
+  type: 'BID_PLACED';
+  details: {
+    bidder: string;
+    bidAmount: number;
+    totalEscrowedAmount: number;
+    isNewHighest: boolean;
+  };
+}
+
+export interface BidWithdrawnEvent extends AuctionEvent {
+  type: 'BID_WITHDRAWN';
+  details: {
+    bidder: string;
+    withdrawnAmount: number;
+    remainingEscrowedAmount: number;
+  };
+}
+
+// Configuration for the enhanced auction system
+export interface AuctionConfig {
+  maxConcurrentBidders?: number;
+  enableAutoRefund?: boolean;
+  minBidIncrement?: number;
+  maxAuctionDuration?: number;
+  escrowExpiryBlocks?: number;
 }
