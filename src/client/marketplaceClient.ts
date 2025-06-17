@@ -152,4 +152,211 @@ export class MarketplaceClient {
       return false;
     }
   }
+
+  /**
+   * Get account's balance for a specific asset
+   */
+  async getAssetBalance(account: string, assetId: number): Promise<number> {
+    try {
+      const accountInfo = await this.indexerClient.lookupAccountAssets(account).assetId(assetId).do();
+      
+      if (!accountInfo.assets || accountInfo.assets.length === 0) {
+        return 0;
+      }
+
+      return accountInfo.assets[0].amount;
+    } catch (error) {
+      throw new Error(`Failed to get asset balance: ${error}`);
+    }
+  }
+
+  /**
+   * Get account's ALGO balance
+   */
+  async getAlgoBalance(account: string): Promise<number> {
+    try {
+      const accountInfo = await this.algodClient.accountInformation(account).do();
+      return accountInfo.amount;
+    } catch (error) {
+      throw new Error(`Failed to get ALGO balance: ${error}`);
+    }
+  }
+
+  /**
+   * Get all assets owned by an account
+   */
+  async getAccountAssets(account: string): Promise<AssetInfo[]> {
+    try {
+      const accountInfo = await this.indexerClient.lookupAccountAssets(account).do();
+      
+      if (!accountInfo.assets) {
+        return [];
+      }
+
+      const assets: AssetInfo[] = [];
+      
+      for (const asset of accountInfo.assets) {
+        if (asset.amount > 0) {
+          try {
+            const assetInfo = await this.getAssetInfo(asset['asset-id']);
+            assets.push({
+              ...assetInfo,
+              balance: asset.amount
+            });
+          } catch (error) {
+            // Skip assets that can't be looked up
+            continue;
+          }
+        }
+      }
+
+      return assets;
+    } catch (error) {
+      throw new Error(`Failed to get account assets: ${error}`);
+    }
+  }
+
+  /**
+   * Batch opt-in to multiple assets
+   */
+  async batchOptInToAssets(account: string, assetIds: number[]): Promise<string[]> {
+    const suggestedParams = await this.algodClient.getTransactionParams().do();
+    const txns: algosdk.Transaction[] = [];
+    const txIds: string[] = [];
+
+    for (const assetId of assetIds) {
+      // Check if already opted in
+      const isOptedIn = await this.isOptedInToAsset(account, assetId);
+      if (isOptedIn) {
+        continue;
+      }
+
+      const txn = algosdk.makeAssetTransferTxnWithSuggestedParams(
+        account,
+        account,
+        undefined, // close to
+        undefined, // revocation target
+        0, // amount (0 for opt-in)
+        undefined, // note
+        assetId,
+        suggestedParams
+      );
+
+      txns.push(txn);
+    }
+
+    if (txns.length === 0) {
+      return [];
+    }
+
+    // Group transactions if there are multiple
+    if (txns.length > 1) {
+      algosdk.assignGroupID(txns);
+    }
+
+    const signedTxns = await this.signer(txns, Array.from({ length: txns.length }, (_, i) => i));
+    
+    for (const signedTxn of signedTxns) {
+      const response = await this.algodClient.sendRawTransaction(signedTxn).do();
+      txIds.push(response.txId);
+    }
+
+    // Wait for all confirmations
+    for (const txId of txIds) {
+      await algosdk.waitForConfirmation(this.algodClient, txId, 5);
+    }
+
+    return txIds;
+  }
+
+  /**
+   * Search for assets by name or unit name
+   */
+  async searchAssets(query: string, limit: number = 10): Promise<AssetInfo[]> {
+    try {
+      const response = await this.indexerClient
+        .searchForAssets()
+        .name(query)
+        .limit(limit)
+        .do();
+
+      if (!response.assets) {
+        return [];
+      }
+
+      return response.assets.map((asset: any) => ({
+        id: asset.index,
+        name: asset.params.name || '',
+        unitName: asset.params['unit-name'] || '',
+        url: asset.params.url,
+        totalSupply: asset.params.total,
+        decimals: asset.params.decimals,
+        creator: asset.params.creator
+      }));
+    } catch (error) {
+      throw new Error(`Failed to search assets: ${error}`);
+    }
+  }
+
+  /**
+   * Get recent transactions for an account
+   */
+  async getAccountTransactions(
+    account: string, 
+    limit: number = 10,
+    assetId?: number
+  ): Promise<any[]> {
+    try {
+      let query = this.indexerClient
+        .lookupAccountTransactions(account)
+        .limit(limit);
+
+      if (assetId) {
+        query = query.assetId(assetId);
+      }
+
+      const response = await query.do();
+      return response.transactions || [];
+    } catch (error) {
+      throw new Error(`Failed to get account transactions: ${error}`);
+    }
+  }
+
+  /**
+   * Utility method to format microAlgos to Algos
+   */
+  static microAlgosToAlgos(microAlgos: number): number {
+    return microAlgos / 1_000_000;
+  }
+
+  /**
+   * Utility method to format Algos to microAlgos
+   */
+  static algosToMicroAlgos(algos: number): number {
+    return Math.round(algos * 1_000_000);
+  }
+
+  /**
+   * Get suggested transaction parameters
+   */
+  async getSuggestedParams(): Promise<algosdk.SuggestedParams> {
+    return await this.algodClient.getTransactionParams().do();
+  }
+
+  /**
+   * Get the current network status
+   */
+  async getNetworkStatus(): Promise<any> {
+    return await this.algodClient.status().do();
+  }
+
+  /**
+   * Wait for transaction confirmation with detailed status
+   */
+  async waitForTransactionConfirmation(
+    txId: string, 
+    maxRounds: number = 5
+  ): Promise<any> {
+    return await algosdk.waitForConfirmation(this.algodClient, txId, maxRounds);
+  }
 }
