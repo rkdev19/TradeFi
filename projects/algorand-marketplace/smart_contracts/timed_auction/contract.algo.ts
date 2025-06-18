@@ -14,6 +14,10 @@ export class TimedAuctionContract extends Contract {
   highestBid: uint64;
   highestBidder: Address;
   auctionEndTime: uint64;
+  assetEscrowed: boolean;
+
+  // Placeholder for "no bidder"
+  private readonly NO_BIDDER = new Address("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ");
 
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
   createApplication(
@@ -24,10 +28,9 @@ export class TimedAuctionContract extends Contract {
     this.assetId = assetId.id;
     this.floorPrice = floorPrice;
     this.highestBid = 0;
-    this.highestBidder = new Address("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ");
+    this.highestBidder = this.NO_BIDDER;
+    this.assetEscrowed = false;
 
-    // Set auction end time based on current round + duration
-    // Converting seconds to rounds (approximately 4.5 seconds per round)
     const roundsToAdd = Math.ceil(Number(auctionDurationSeconds) / 4.5);
     this.auctionEndTime = this.txn.lastValid + BigInt(roundsToAdd);
   }
@@ -46,8 +49,10 @@ export class TimedAuctionContract extends Contract {
       throw new Error("Already opted in to asset");
     }
 
-    if (mbrpay.receiver !== this.app.address ||
-        mbrpay.amount < this.app.minBalance + this.app.assetOptInMinBalance) {
+    if (
+      mbrpay.receiver !== this.app.address ||
+      mbrpay.amount < this.app.minBalance + this.app.assetOptInMinBalance
+    ) {
       throw new Error("Invalid MBR payment");
     }
 
@@ -59,19 +64,44 @@ export class TimedAuctionContract extends Contract {
   }
 
   @abimethod()
+  escrowAsset(assetTransferTxn: any): void {
+    this.assertSenderIsCreator();
+
+    if (this.assetEscrowed) {
+      throw new Error("Asset already escrowed");
+    }
+
+    if (
+      assetTransferTxn.assetReceiver !== this.app.address ||
+      assetTransferTxn.xferAsset !== this.assetId ||
+      assetTransferTxn.assetAmount !== 1
+    ) {
+      throw new Error("Invalid escrow transfer");
+    }
+
+    this.assetEscrowed = true;
+  }
+
+  @abimethod()
   placeBid(bidPayment: PaymentTxn): void {
+    if (!this.assetEscrowed) {
+      throw new Error("Asset not yet escrowed");
+    }
+
     if (this.txn.lastValid > this.auctionEndTime) {
       throw new Error("Auction has ended");
     }
 
-    if (bidPayment.sender !== this.txn.sender ||
-        bidPayment.receiver !== this.app.address ||
-        bidPayment.amount <= this.highestBid ||
-        bidPayment.amount < this.floorPrice) {
+    if (
+      bidPayment.sender !== this.txn.sender ||
+      bidPayment.receiver !== this.app.address ||
+      bidPayment.amount <= this.highestBid ||
+      bidPayment.amount < this.floorPrice
+    ) {
       throw new Error("Invalid bid");
     }
 
-    if (this.highestBidder.toString() !== "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ") {
+    if (this.highestBidder.toString() !== this.NO_BIDDER.toString()) {
       this.sendPayment({
         receiver: this.highestBidder,
         amount: this.highestBid,
@@ -89,20 +119,22 @@ export class TimedAuctionContract extends Contract {
       throw new Error("Auction still in progress");
     }
 
-    if (this.highestBidder.toString() !== "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ") {
-      this.sendAssetTransfer({
-        xferAsset: this.assetId,
-        assetReceiver: this.highestBidder,
-        assetAmount: 1,
-        fee: 1000
-      });
-
-      this.sendPayment({
-        receiver: this.app.creator,
-        amount: this.highestBid,
-        fee: 1000
-      });
+    if (this.highestBidder.toString() === this.NO_BIDDER.toString()) {
+      throw new Error("No valid bids to finalize");
     }
+
+    this.sendAssetTransfer({
+      xferAsset: this.assetId,
+      assetReceiver: this.highestBidder,
+      assetAmount: 1,
+      fee: 1000
+    });
+
+    this.sendPayment({
+      receiver: this.app.creator,
+      amount: this.highestBid,
+      fee: 1000
+    });
 
     this.resetAuctionState();
   }
@@ -111,7 +143,7 @@ export class TimedAuctionContract extends Contract {
   acceptBid(): void {
     this.assertSenderIsCreator();
 
-    if (this.highestBidder.toString() === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ") {
+    if (this.highestBidder.toString() === this.NO_BIDDER.toString()) {
       throw new Error("No valid bid to accept");
     }
 
@@ -135,7 +167,7 @@ export class TimedAuctionContract extends Contract {
   rejectBid(): void {
     this.assertSenderIsCreator();
 
-    if (this.highestBidder.toString() === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ") {
+    if (this.highestBidder.toString() === this.NO_BIDDER.toString()) {
       throw new Error("No valid bid to reject");
     }
 
@@ -170,7 +202,8 @@ export class TimedAuctionContract extends Contract {
 
   private resetAuctionState(): void {
     this.highestBid = 0;
-    this.highestBidder = new Address("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ");
+    this.highestBidder = this.NO_BIDDER;
+    this.assetEscrowed = false;
   }
 
   private assertSenderIsCreator(): void {
