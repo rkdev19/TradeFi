@@ -158,3 +158,69 @@ export class TimedAuctionContract extends Contract {
     // Simply deactivate escrow - all bidders can then call withdrawBid()
     this.isEscrowActive = false;
   }
+  @abimethod({ allowActions: ['DeleteApplication'] })
+    deleteApplication(): void {
+      this.assertSenderIsCreator();
+  
+      // Ensure all funds have been withdrawn before deletion
+      if (this.totalEscrowedAmount > 0) {
+        throw new Error("Cannot delete application while funds are still escrowed");
+      }
+  
+      this.sendAssetTransfer({
+        xferAsset: this.assetId,
+        assetReceiver: this.app.creator,
+        assetAmount: 0,
+        assetCloseTo: this.app.creator,
+        fee: 1000
+      });
+  
+      this.sendPayment({
+        receiver: this.app.creator,
+        amount: 0,
+        closeRemainderTo: this.app.creator,
+        fee: 1000
+      });
+    }
+  
+    // --- Private Utility Functions ---
+  
+    private endAuction(): void {
+      if (!this.isEscrowActive) {
+        throw new Error("Auction already ended");
+      }
+  
+      if (this.highestBidder.toString() !== this.NO_BIDDER.toString()) {
+        const winningAmount = this.bidderEscrows.get(this.highestBidder).value || 0;
+        
+        // Transfer asset to highest bidder
+        this.sendAssetTransfer({
+          xferAsset: this.assetId,
+          assetReceiver: this.highestBidder,
+          assetAmount: 1,
+          fee: 1000
+        });
+  
+        // Transfer winning bid to creator
+        this.sendPayment({
+          receiver: this.app.creator,
+          amount: winningAmount,
+          fee: 1000
+        });
+  
+        // Update state for the winner
+        this.bidderEscrows.delete(this.highestBidder);
+        this.totalEscrowedAmount -= winningAmount;
+        this.activeBiddersCount -= 1;
+      }
+  
+      // Deactivate escrow to allow all remaining (losing) bidders to withdraw their funds
+      this.isEscrowActive = false;
+    }
+  
+    private assertSenderIsCreator(): void {
+      if (this.txn.sender.toString() !== this.app.creator.toString()) {
+        throw new Error("Only the creator can perform this action");
+      }
+    }
+  }
