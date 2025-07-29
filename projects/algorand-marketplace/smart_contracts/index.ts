@@ -1,68 +1,59 @@
-import { Config } from '@algorandfoundation/algokit-utils';
-import { registerDebugEventHandlers } from '@algorandfoundation/algokit-utils-debug';
-import { consoleLogger } from '@algorandfoundation/algokit-utils/types/logging';
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import { AlgorandClient, SendAtomicTransactionComposerResults } from '@algorandfoundation/algokit-utils'
+import { TimedAuctionClient } from '../artifacts/timed_auction/TimedAuctionClient'
+import { Account } from '@algorandfoundation/algokit-utils/types/account'
 
-// Configure AlgoKit with enhanced logging and debugging
-Config.configure({
-  logger: consoleLogger,
-  debug: true,
-});
-
-registerDebugEventHandlers();
-
-// Base directory for deployers
-const baseDir = path.resolve(__dirname);
-
-// Dynamically import deploy-config module if it exists
-async function importDeployerIfExists(dir: string) {
-  const deployerPath = path.resolve(dir, 'deploy-config');
-  try {
-    if (await fs.stat(deployerPath + '.ts').catch(() => null) || await fs.stat(deployerPath + '.js').catch(() => null)) {
-      const deployer = await import(deployerPath);
-      return { ...deployer, name: path.basename(dir) };
-    }
-  } catch (error) {
-    console.error(`Error importing deploy-config from ${dir}:`, error);
-  }
-  return null;
+// Helper function to create a dummy asset for the auction
+async function createDummyAsset(algorand: AlgorandClient, deployer: Account): Promise<number> {
+  console.log('--- Creating dummy asset for auction ---')
+  const assetCreate = await algorand.send.assetCreate({
+    sender: deployer.addr,
+    assetName: 'AUCTION_ITEM',
+    unitName: 'ITEM',
+    total: 1,
+    decimals: 0,
+  })
+  const assetId = Number(assetCreate.confirmation?.assetIndex)
+  console.log(`Dummy asset created with ID: ${assetId}`)
+  return assetId
 }
 
-// Retrieve all deployers from subdirectories
-async function getDeployers() {
-  try {
-    const directories = await fs.readdir(baseDir, { withFileTypes: true });
-    const deployers = await Promise.all(
-      directories
-        .filter((dirent) => dirent.isDirectory())
-        .map((dirent) => importDeployerIfExists(path.resolve(baseDir, dirent.name)))
-    );
-    return deployers.filter((deployer) => deployer !== null);
-  } catch (error) {
-    console.error('Error reading directories:', error);
-    return [];
-  }
+export async function deploy() {
+  console.log('=== Deploying TimedAuction ===')
+
+  // Initialize Algorand client and deployer account
+  const algorand = AlgorandClient.fromEnvironment()
+  const deployer = await algorand.account.fromEnvironment('DEPLOYER')
+  await algorand.fund.ensure(deployer, (1).algo())
+
+  // Create a dummy asset to be auctioned
+  const assetId = await createDummyAsset(algorand, deployer);
+
+  // Get an application client
+  const appClient = new TimedAuctionClient(
+    {
+      sender: deployer,
+      resolveBy: 'id',
+      id: 0,
+    },
+    algorand.client.algod,
+  )
+
+  // Deploy the TimedAuction app
+  const { appId, appAddress, transaction } = await appClient.create.createApplication({
+    asset: assetId,
+    floorPrice: (0.1).algo(), // Example floor price: 0.1 ALGO
+    auctionDurationSeconds: 3600, // Example duration: 1 hour
+  })
+
+  console.log(
+    `TimedAuction app created with App ID: ${appId} and App Address: ${appAddress} in transaction ${transaction.txID()}`,
+  )
+
+  // Fund the app account with 1 Algo after creation
+  await algorand.send.payment({
+    amount: (1).algo(),
+    sender: deployer.addr,
+    receiver: appAddress,
+  })
+  console.log(`App account ${appAddress} funded with 1 ALGO.`)
 }
-
-// Execute deployers for specified contract or all
-(async () => {
-  const contractName = process.argv[2];
-  const contractDeployers = await getDeployers();
-  const deployersToExecute = contractName
-    ? contractDeployers.filter((deployer) => deployer.name === contractName)
-    : contractDeployers;
-
-  if (contractName && deployersToExecute.length === 0) {
-    console.warn(`No deployer found for contract name: ${contractName}`);
-    return;
-  }
-
-  for (const deployer of deployersToExecute) {
-    try {
-      await deployer.deploy();
-    } catch (error) {
-      console.error(`Error deploying ${deployer.name}:`, error);
-    }
-  }
-})();
