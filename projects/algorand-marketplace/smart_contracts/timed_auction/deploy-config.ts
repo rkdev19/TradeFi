@@ -1,20 +1,26 @@
 import { AlgorandClient } from '@algorandfoundation/algokit-utils'
 import { TimedAuctionFactory } from '../artifacts/timed_auction/TimedAuctionClient'
 
-// Below is a showcase of various deployment options you can use in TypeScript Client
+// === Commit: Setup deployment function for TimedAuction smart contract ===
 export async function deploy() {
   console.log('=== Deploying TimedAuction ===')
 
+  // === Commit: Initialize Algorand client and load deployer account from environment ===
   const algorand = AlgorandClient.fromEnvironment()
   const deployer = await algorand.account.fromEnvironment('DEPLOYER')
 
+  // === Commit: Create app factory with deployer as default sender ===
   const factory = algorand.client.getTypedAppFactory(TimedAuctionFactory, {
     defaultSender: deployer.addr,
   })
 
-  const { appClient, result } = await factory.deploy({ onUpdate: 'append', onSchemaBreak: 'append' })
+  // === Commit: Deploy the TimedAuction app with schema/app update handling ===
+  const { appClient, result } = await factory.deploy({
+    onUpdate: 'append',
+    onSchemaBreak: 'append',
+  })
 
-  // If app was just created fund the app account
+  // === Commit: Fund the app account with 1 Algo after creation/replacement ===
   if (['create', 'replace'].includes(result.operationPerformed)) {
     await algorand.send.payment({
       amount: (1).algo(),
@@ -23,10 +29,13 @@ export async function deploy() {
     })
   }
 
-  const method = 'hello'  
+  // === Commit: Call the 'hello' method with parameter 'world' ===
+  const method = 'hello'
   const response = await appClient.send.hello({
     args: { name: 'world' },
   })
+
+  // === Commit: Log the result of the 'hello' method call ===
   console.log(
     `Called ${method} on ${appClient.appClient.appName} (${appClient.appClient.appId}) with name = world, received: ${response.return}`,
   )
