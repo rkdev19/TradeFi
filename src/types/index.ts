@@ -1,4 +1,3 @@
-// Enhanced types for the TradeFi SDK with escrow support
 
 export interface AuctionInfo {
   appId: number;
@@ -8,7 +7,6 @@ export interface AuctionInfo {
   highestBidder: string;
   auctionEndTime: number;
   creator: string;
-  // New escrow fields
   totalEscrowedAmount: number;
   activeBiddersCount: number;
   isEscrowActive: boolean;
@@ -46,7 +44,7 @@ export interface WithdrawBidParams {
 
 // Enhanced MarketplaceClient interface
 export interface AuctionClient {
-  // Existing methods
+  // Core methods
   createAuction(params: CreateAuctionParams): Promise<number>;
   placeBid(params: PlaceBidParams): Promise<void>;
   finalizeAuction(appId: number, sender: string): Promise<void>;
@@ -55,15 +53,20 @@ export interface AuctionClient {
   getAuctionInfo(appId: number): Promise<AuctionInfo>;
   listActiveAuctions(): Promise<AuctionInfo[]>;
   
-  // New escrow methods
+  // Escrow methods
   withdrawBid(params: WithdrawBidParams): Promise<void>;
   getBidderEscrow(appId: number, bidder: string): Promise<number>;
   getEscrowStatus(appId: number): Promise<EscrowStatus>;
+
+  /**
+   * NOTE: This function corresponds to a stub in the smart contract.
+   * A robust, iterable refund mechanism is complex and not implemented.
+   * This method should be treated as a placeholder for a potential future feature.
+   */
   refundAllBidders(appId: number, creator: string): Promise<void>;
   
   // Utility methods
   canWithdrawBid(appId: number, bidder: string): Promise<boolean>;
-  getAllBidderEscrows(appId: number): Promise<BidderEscrowInfo[]>;
 }
 
 // Error types for better error handling
@@ -90,7 +93,11 @@ export const AUCTION_CONSTANTS = {
   ZERO_ADDRESS: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
   DEFAULT_FEE: 1000,
   SECONDS_PER_ROUND: 4.5,
-  MIN_BID_INCREMENT: 1, // microAlgos
+  /**
+   * NOTE: This is a client-side rule. The current contract only checks
+   * if the new total bid is greater than the highest bid, not by how much.
+   */
+  MIN_BID_INCREMENT: 10000, // 0.01 Algos
 } as const;
 
 // Event types for tracking auction activities
@@ -124,7 +131,10 @@ export interface BidWithdrawnEvent extends AuctionEvent {
 // Configuration for the enhanced auction system
 export interface AuctionConfig {
   maxConcurrentBidders?: number;
-  enableAutoRefund?: boolean;
+  /**
+   * NOTE: This is a client-side rule for placing bids.
+   * The on-chain contract does not enforce a minimum increment.
+   */
   minBidIncrement?: number;
   maxAuctionDuration?: number;
   escrowExpiryBlocks?: number;
