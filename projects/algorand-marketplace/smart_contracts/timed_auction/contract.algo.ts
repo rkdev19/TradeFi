@@ -95,6 +95,10 @@ export class TimedAuctionContract extends Contract {
       throw new Error("Cannot place bid: auction has ended");
     }
 
+    if (this.txn.sender.toString() === this.app.creator.toString()) {
+      throw new Error("Creator cannot place bids");
+    }
+
     if (bidPayment.sender !== this.txn.sender || bidPayment.receiver !== this.app.address) {
       throw new Error("Invalid bid payment transaction");
     }
