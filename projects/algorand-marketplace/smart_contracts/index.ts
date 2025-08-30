@@ -1,40 +1,77 @@
-import { AlgorandClient, SendAtomicTransactionComposerResults } from '@algorandfoundation/algokit-utils'
-import { TimedAuctionClient } from '../artifacts/timed_auction/TimedAuctionClient'
+import { AlgorandClient } from '@algorandfoundation/algokit-utils'
 import { Account } from '@algorandfoundation/algokit-utils/types/account'
+import { TimedAuctionClient } from '../artifacts/timed_auction/TimedAuctionClient'
 
-// Helper function to create a dummy asset for the auction
+/**
+ * Create a dummy ASA (Algorand Standard Asset) for auction testing.
+ */
 async function createDummyAsset(algorand: AlgorandClient, deployer: Account): Promise<number> {
   console.log('--- Creating dummy asset for auction ---')
-  const assetCreate = await algorand.send.assetCreate({
+
+  const assetCreateTx = await algorand.send.assetCreate({
     sender: deployer.addr,
     assetName: 'AUCTION_ITEM',
     unitName: 'ITEM',
     total: 1,
     decimals: 0,
   })
-  const assetId = Number(assetCreate.confirmation?.assetIndex)
+
+  const assetId = Number(assetCreateTx.confirmation?.assetIndex)
   console.log(`Dummy asset created with ID: ${assetId}`)
+
   return assetId
 }
 
+/**
+ * Deploy the TimedAuction application contract.
+ */
 export async function deploy() {
   console.log('=== Deploying TimedAuction ===')
 
-  // Initialize Algorand client and deployer account
+  // Setup Algorand client + deployer account
   const algorand = AlgorandClient.fromEnvironment()
   const deployer = await algorand.account.fromEnvironment('DEPLOYER')
+
+  // Ensure deployer has funds
   await algorand.fund.ensure(deployer, (1).algo())
+  console.log(`Deployer ${deployer.addr} funded with 1 ALGO`)
 
-  // Create a dummy asset to be auctioned
-  const assetId = await createDummyAsset(algorand, deployer);
+  // Create dummy ASA for auction
+  const assetId = await createDummyAsset(algorand, deployer)
 
-  // Get an application client
+  // Initialize TimedAuction client
   const appClient = new TimedAuctionClient(
     {
       sender: deployer,
       resolveBy: 'id',
-      id: 0,
+      id: 0, // fresh deployment
     },
+    algorand.client.algod,
+  )
+
+  // Deploy application
+  const { appId, appAddress, transaction } = await appClient.create.createApplication({
+    asset: assetId,
+    floorPrice: (0.1).algo(), // 0.1 ALGO floor price
+    auctionDurationSeconds: 3600, // 1 hour auction
+  })
+
+  console.log(
+    `TimedAuction deployed.
+     App ID: ${appId}
+     App Address: ${appAddress}
+     TxID: ${transaction.txID()}`
+  )
+
+  // Fund contract account with 1 ALGO
+  await algorand.send.payment({
+    amount: (1).algo(),
+    sender: deployer.addr,
+    receiver: appAddress,
+  })
+
+  console.log(`App account ${appAddress} funded with 1 ALGO.`)
+}    },
     algorand.client.algod,
   )
 
