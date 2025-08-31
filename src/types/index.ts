@@ -1,3 +1,6 @@
+// =========================
+// Core Auction Types
+// =========================
 
 export interface AuctionInfo {
   appId: number;
@@ -7,18 +10,6 @@ export interface AuctionInfo {
   highestBidder: string;
   auctionEndTime: number;
   creator: string;
-  totalEscrowedAmount: number;
-  activeBiddersCount: number;
-  isEscrowActive: boolean;
-}
-
-export interface BidderEscrowInfo {
-  bidder: string;
-  escrowedAmount: number;
-  isHighestBidder: boolean;
-}
-
-export interface EscrowStatus {
   totalEscrowedAmount: number;
   activeBiddersCount: number;
   isEscrowActive: boolean;
@@ -42,7 +33,26 @@ export interface WithdrawBidParams {
   bidder: string;
 }
 
-// Enhanced MarketplaceClient interface
+// =========================
+// Escrow Types
+// =========================
+
+export interface BidderEscrowInfo {
+  bidder: string;
+  escrowedAmount: number;
+  isHighestBidder: boolean;
+}
+
+export interface EscrowStatus {
+  totalEscrowedAmount: number;
+  activeBiddersCount: number;
+  isEscrowActive: boolean;
+}
+
+// =========================
+// Auction Client Interface
+// =========================
+
 export interface AuctionClient {
   // Core methods
   createAuction(params: CreateAuctionParams): Promise<number>;
@@ -52,24 +62,26 @@ export interface AuctionClient {
   rejectBid(appId: number, creator: string): Promise<void>;
   getAuctionInfo(appId: number): Promise<AuctionInfo>;
   listActiveAuctions(): Promise<AuctionInfo[]>;
-  
+
   // Escrow methods
   withdrawBid(params: WithdrawBidParams): Promise<void>;
   getBidderEscrow(appId: number, bidder: string): Promise<number>;
   getEscrowStatus(appId: number): Promise<EscrowStatus>;
 
   /**
-   * NOTE: This function corresponds to a stub in the smart contract.
-   * A robust, iterable refund mechanism is complex and not implemented.
-   * This method should be treated as a placeholder for a potential future feature.
+   * Placeholder for a future robust refund mechanism.
+   * Currently not implemented on-chain.
    */
   refundAllBidders(appId: number, creator: string): Promise<void>;
-  
+
   // Utility methods
   canWithdrawBid(appId: number, bidder: string): Promise<boolean>;
 }
 
-// Error types for better error handling
+// =========================
+// Error Types
+// =========================
+
 export class AuctionError extends Error {
   constructor(
     message: string,
@@ -77,32 +89,46 @@ export class AuctionError extends Error {
     public appId?: number
   ) {
     super(message);
-    this.name = 'AuctionError';
+    this.name = "AuctionError";
   }
 }
 
 export class EscrowError extends AuctionError {
   constructor(message: string, appId?: number) {
-    super(message, 'ESCROW_ERROR', appId);
-    this.name = 'EscrowError';
+    super(message, "ESCROW_ERROR", appId);
+    this.name = "EscrowError";
   }
 }
 
-// Constants for the enhanced contract
+// =========================
+// Constants
+// =========================
+
 export const AUCTION_CONSTANTS = {
   ZERO_ADDRESS: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
   DEFAULT_FEE: 1000,
   SECONDS_PER_ROUND: 4.5,
+
   /**
-   * NOTE: This is a client-side rule. The current contract only checks
-   * if the new total bid is greater than the highest bid, not by how much.
+   * Client-side rule.
+   * Contract only checks if new total > highest bid.
    */
-  MIN_BID_INCREMENT: 10000, // 0.01 Algos
+  MIN_BID_INCREMENT: 10_000, // 0.01 Algos
 } as const;
 
-// Event types for tracking auction activities
+// =========================
+// Events
+// =========================
+
+export type AuctionEventType =
+  | "BID_PLACED"
+  | "BID_WITHDRAWN"
+  | "AUCTION_FINALIZED"
+  | "BID_ACCEPTED"
+  | "BID_REJECTED";
+
 export interface AuctionEvent {
-  type: 'BID_PLACED' | 'BID_WITHDRAWN' | 'AUCTION_FINALIZED' | 'BID_ACCEPTED' | 'BID_REJECTED';
+  type: AuctionEventType;
   appId: number;
   txId: string;
   timestamp: number;
@@ -110,7 +136,7 @@ export interface AuctionEvent {
 }
 
 export interface BidPlacedEvent extends AuctionEvent {
-  type: 'BID_PLACED';
+  type: "BID_PLACED";
   details: {
     bidder: string;
     bidAmount: number;
@@ -120,7 +146,7 @@ export interface BidPlacedEvent extends AuctionEvent {
 }
 
 export interface BidWithdrawnEvent extends AuctionEvent {
-  type: 'BID_WITHDRAWN';
+  type: "BID_WITHDRAWN";
   details: {
     bidder: string;
     withdrawnAmount: number;
@@ -128,14 +154,18 @@ export interface BidWithdrawnEvent extends AuctionEvent {
   };
 }
 
-// Configuration for the enhanced auction system
+// =========================
+// Config
+// =========================
+
 export interface AuctionConfig {
   maxConcurrentBidders?: number;
+
   /**
-   * NOTE: This is a client-side rule for placing bids.
-   * The on-chain contract does not enforce a minimum increment.
+   * Client-side rule (not enforced on-chain).
    */
   minBidIncrement?: number;
+
   maxAuctionDuration?: number;
   escrowExpiryBlocks?: number;
 }
