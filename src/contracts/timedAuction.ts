@@ -5,222 +5,411 @@ import {
   uint64,
   Asset,
   PaymentTxn,
-  BoxMap
+  AssetTransferTxn,
+  BoxMap,
+  GlobalStateKey,
 } from '@algorandfoundation/algorand-typescript';
 
 export class TimedAuctionContract extends Contract {
   // --- State Variables ---
-  assetId: uint64;
-  floorPrice: uint64;
-  highestBid: uint64;
-  highestBidder: Address;
-  auctionEndTime: uint64;
-  totalEscrowedAmount: uint64;
-  activeBiddersCount: uint64;
-  isEscrowActive: boolean;
+  assetId = GlobalStateKey<uint64>({ key: 'asset_id' });
+  floorPrice = GlobalStateKey<uint64>({ key: 'floor_price' });
+  highestBid = GlobalStateKey<uint64>({ key: 'highest_bid' });
+  highestBidder = GlobalStateKey<Address>({ key: 'highest_bidder' });
+  auctionEndTime = GlobalStateKey<uint64>({ key: 'auction_end' });
+  totalEscrowedAmount = GlobalStateKey<uint64>({ key: 'total_escrowed' });
+  activeBiddersCount = GlobalStateKey<uint64>({ key: 'active_bidders' });
+  isEscrowActive = GlobalStateKey<boolean>({ key: 'escrow_active' });
+  assetEscrowed = GlobalStateKey<boolean>({ key: 'asset_escrowed' });
 
   // Box storage for managing bidder escrows
   // Key: bidder address, Value: cumulative escrowed amount
   bidderEscrows = new BoxMap<Address, uint64>();
 
-  private readonly NO_BIDDER = new Address("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ");
+  // Constants
+  private readonly NO_BIDDER = Address.zeroAddress;
+  private readonly MIN_TXN_FEE: uint64 = 1000n;
+  private readonly MIN_AUCTION_DURATION: uint64 = 300n; // 5 minutes
+  private readonly MAX_AUCTION_DURATION: uint64 = 2592000n; // 30 days
+  private readonly BLOCK_TIME_SECONDS = 4.5;
 
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
   createApplication(
-    assetId: Asset,
+    asset: Asset,
     floorPrice: uint64,
     auctionDurationSeconds: uint64
   ): void {
-    this.assetId = assetId.id;
-    this.floorPrice = floorPrice;
-    this.highestBid = 0;
-    this.highestBidder = this.NO_BIDDER;
-    this.totalEscrowedAmount = 0;
-    this.activeBiddersCount = 0;
-    this.isEscrowActive = true;
-
-    const roundsToAdd = Math.ceil(Number(auctionDurationSeconds) / 4.5);
-    this.auctionEndTime = this.txn.lastValid + BigInt(roundsToAdd);
-  }
-
-  @abimethod()
-  setFloorPrice(floorPrice: uint64): void {
-    this.assertSenderIsCreator();
-    this.floorPrice = floorPrice;
-  }
-
-  @abimethod()
-  optInToAsset(mbrpay: PaymentTxn): void {
-    // Note: The asset being auctioned must be escrowed separately by the creator
-    this.assertSenderIsCreator();
-
-    if (this.app.address.isOptedInToAsset(this.assetId)) {
-      throw new Error("Already opted in to asset");
+    // Input validation
+    if (floorPrice === 0n) {
+      throw new Error('Floor price must be greater than 0');
     }
 
-    if (mbrpay.receiver !== this.app.address ||
-        mbrpay.amount < this.app.minBalance + this.app.assetOptInMinBalance) {
-      throw new Error("Invalid MBR payment for asset opt-in");
+    if (auctionDurationSeconds < this.MIN_AUCTION_DURATION) {
+      throw new Error(`Auction duration must be at least ${this.MIN_AUCTION_DURATION} seconds`);
     }
 
+    if (auctionDurationSeconds > this.MAX_AUCTION_DURATION) {
+      throw new Error(`Auction duration cannot exceed ${this.MAX_AUCTION_DURATION} seconds`);
+    }
+
+    // Initialize state
+    this.assetId.value = asset.id;
+    this.floorPrice.value = floorPrice;
+    this.highestBid.value = 0n;
+    this.highestBidder.value = this.NO_BIDDER;
+    this.totalEscrowedAmount.value = 0n;
+    this.activeBiddersCount.value = 0n;
+    this.isEscrowActive.value = false; // Start inactive until asset is escrowed
+    this.assetEscrowed.value = false;
+
+    // Calculate auction end time
+    const roundsToAdd = BigInt(Math.ceil(Number(auctionDurationSeconds) / this.BLOCK_TIME_SECONDS));
+    this.auctionEndTime.value = this.txn.lastValid + roundsToAdd;
+
+    this.log(`Auction created: Asset ${asset.id}, Floor ${floorPrice}, Duration ${auctionDurationSeconds}s`);
+  }
+
+  @abimethod({ allowActions: ['NoOp'] })
+  updateFloorPrice(newFloorPrice: uint64): void {
+    this.assertSenderIsCreator();
+    this.assertAuctionNotStarted();
+
+    if (newFloorPrice === 0n) {
+      throw new Error('Floor price must be greater than 0');
+    }
+
+    this.floorPrice.value = newFloorPrice;
+    this.log(`Floor price updated to ${newFloorPrice}`);
+  }
+
+  @abimethod({ allowActions: ['NoOp'] })
+  optInToAsset(mbr_payment: PaymentTxn): void {
+    this.assertSenderIsCreator();
+
+    if (this.app.address.isOptedInToAsset(this.assetId.value)) {
+      throw new Error('Contract already opted into asset');
+    }
+
+    // Validate MBR payment
+    const requiredMBR = this.app.minBalance + this.app.assetOptInMinBalance;
+    if (mbr_payment.receiver !== this.app.address || mbr_payment.amount < requiredMBR) {
+      throw new Error(`Invalid MBR payment. Required: ${requiredMBR} microALGOs`);
+    }
+
+    // Opt into the asset
     this.sendAssetTransfer({
-      xferAsset: this.assetId,
+      xferAsset: this.assetId.value,
       assetReceiver: this.app.address,
-      assetAmount: 0
+      assetAmount: 0n,
     });
+
+    this.log(`Opted into asset ${this.assetId.value}`);
   }
 
-  @abimethod()
-  placeBid(bidPayment: PaymentTxn): void {
-    if (this.txn.lastValid > this.auctionEndTime) {
-      throw new Error("Auction has ended");
+  @abimethod({ allowActions: ['NoOp'] })
+  escrowAsset(asset_txn: AssetTransferTxn): void {
+    this.assertSenderIsCreator();
+
+    if (this.assetEscrowed.value) {
+      throw new Error('Asset already escrowed');
     }
 
-    if (!this.isEscrowActive) {
-      throw new Error("Bidding is no longer active for this auction");
+    // Validate asset transfer
+    if (asset_txn.assetReceiver !== this.app.address ||
+        asset_txn.xferAsset !== this.assetId.value ||
+        asset_txn.assetAmount !== 1n) {
+      throw new Error('Must transfer exactly 1 unit of the auction asset to contract');
     }
 
-    if (bidPayment.sender !== this.txn.sender ||
-        bidPayment.receiver !== this.app.address) {
-      throw new Error("Bid payment transaction is invalid");
+    this.assetEscrowed.value = true;
+    this.isEscrowActive.value = true; // Activate bidding
+    
+    this.log(`Asset ${this.assetId.value} escrowed, auction now active`);
+  }
+
+  @abimethod({ allowActions: ['NoOp'] })
+  placeBid(bid_payment: PaymentTxn): void {
+    this.assertAuctionActive();
+    this.assertAuctionNotEnded();
+
+    // Prevent creator from bidding
+    if (this.txn.sender === this.app.creator) {
+      throw new Error('Contract creator cannot place bids');
+    }
+
+    // Validate bid payment
+    if (bid_payment.sender !== this.txn.sender || bid_payment.receiver !== this.app.address) {
+      throw new Error('Invalid bid payment transaction');
+    }
+
+    if (bid_payment.amount === 0n) {
+      throw new Error('Bid amount must be greater than 0');
     }
 
     const bidder = this.txn.sender;
-    const bidAmount = bidPayment.amount;
-    const currentEscrow = this.bidderEscrows.get(bidder).value || 0;
+    const bidAmount = bid_payment.amount;
+    const currentEscrow = this.bidderEscrows.get(bidder).value || 0n;
     const totalBidAmount = currentEscrow + bidAmount;
 
-    if (totalBidAmount < this.floorPrice) {
-        throw new Error("Total bid must meet or exceed the floor price");
+    // Validate bid requirements
+    if (totalBidAmount < this.floorPrice.value) {
+      throw new Error(`Total bid must meet floor price of ${this.floorPrice.value} microALGOs`);
     }
 
-    if (totalBidAmount <= this.highestBid) {
-      throw new Error("Bid must be higher than current highest bid");
+    if (totalBidAmount <= this.highestBid.value) {
+      throw new Error(`Total bid must exceed current highest bid of ${this.highestBid.value} microALGOs`);
     }
 
-    // Update or create escrow box for the bidder
-    if (currentEscrow === 0) {
-      this.activeBiddersCount += 1;
+    // Update bidder's escrow
+    if (currentEscrow === 0n) {
+      this.activeBiddersCount.value += 1n;
     }
     this.bidderEscrows.set(bidder, totalBidAmount);
-    this.totalEscrowedAmount += bidAmount;
+    this.totalEscrowedAmount.value += bidAmount;
 
     // Update highest bid tracking
-    this.highestBid = totalBidAmount;
-    this.highestBidder = bidder;
+    this.highestBid.value = totalBidAmount;
+    this.highestBidder.value = bidder;
+
+    this.log(`New highest bid: ${totalBidAmount} microALGOs by ${bidder} (added ${bidAmount})`);
   }
 
-  @abimethod()
+  @abimethod({ allowActions: ['NoOp'] })
+  increaseBid(additional_payment: PaymentTxn): void {
+    // Alias for placeBid to make intent clearer
+    this.placeBid(additional_payment);
+  }
+
+  @abimethod({ allowActions: ['NoOp'] })
   withdrawBid(): void {
-    // Users can only withdraw their funds AFTER the auction is no longer active.
-    if (this.isEscrowActive) {
-      throw new Error("Cannot withdraw while auction is active. Please wait for it to end.");
+    if (this.isEscrowActive.value) {
+      throw new Error('Cannot withdraw while auction is active. Wait for auction to end or be cancelled.');
     }
 
     const bidder = this.txn.sender;
     const escrowedAmount = this.bidderEscrows.get(bidder).value;
 
-    if (escrowedAmount === undefined || escrowedAmount === 0) {
-      throw new Error("No escrowed amount found for this address");
+    if (escrowedAmount === undefined || escrowedAmount === 0n) {
+      throw new Error('No escrowed funds found for this address');
     }
 
-    // Process withdrawal payment
+    // Process withdrawal
     this.sendPayment({
       receiver: bidder,
       amount: escrowedAmount,
-      fee: 1000 // Inner transaction fee
+      fee: this.MIN_TXN_FEE,
     });
 
     // Update contract state
     this.bidderEscrows.delete(bidder);
-    this.totalEscrowedAmount -= escrowedAmount;
-    this.activeBiddersCount -= 1;
+    this.totalEscrowedAmount.value -= escrowedAmount;
+    this.activeBiddersCount.value -= 1n;
+
+    this.log(`Withdrew ${escrowedAmount} microALGOs for ${bidder}`);
   }
 
-  @abimethod()
+  @abimethod({ allowActions: ['NoOp'] })
   finalizeAuction(): void {
-    if (this.txn.lastValid <= this.auctionEndTime) {
-      throw new Error("Auction has not yet ended");
+    if (this.txn.lastValid <= this.auctionEndTime.value) {
+      throw new Error('Auction has not yet ended');
     }
 
     this.endAuction();
+    this.log('Auction finalized due to time expiration');
   }
 
-  @abimethod()
+  @abimethod({ allowActions: ['NoOp'] })
   acceptBid(): void {
     this.assertSenderIsCreator();
+    this.assertAuctionActive();
+
+    if (this.highestBidder.value === this.NO_BIDDER) {
+      throw new Error('No bids to accept');
+    }
+
     this.endAuction();
+    this.log(`Bid accepted early by creator: ${this.highestBid.value} microALGOs`);
   }
 
-  @abimethod()
-  rejectBid(): void {
+  @abimethod({ allowActions: ['NoOp'] })
+  cancelAuction(): void {
     this.assertSenderIsCreator();
-    // Simply deactivate escrow - all bidders can then call withdrawBid()
-    this.isEscrowActive = false;
-  }
-  @abimethod({ allowActions: ['DeleteApplication'] })
-    deleteApplication(): void {
-      this.assertSenderIsCreator();
-  
-      // Ensure all funds have been withdrawn before deletion
-      if (this.totalEscrowedAmount > 0) {
-        throw new Error("Cannot delete application while funds are still escrowed");
-      }
-  
+    this.assertAuctionActive();
+
+    // Simply deactivate escrow - all bidders can then withdraw
+    this.isEscrowActive.value = false;
+
+    // Return asset to creator
+    if (this.assetEscrowed.value) {
       this.sendAssetTransfer({
-        xferAsset: this.assetId,
+        xferAsset: this.assetId.value,
         assetReceiver: this.app.creator,
-        assetAmount: 0,
-        assetCloseTo: this.app.creator,
-        fee: 1000
+        assetAmount: 1n,
+        fee: this.MIN_TXN_FEE,
       });
-  
+      this.assetEscrowed.value = false;
+    }
+
+    this.log('Auction cancelled by creator - all bidders can now withdraw funds');
+  }
+
+  @abimethod({ allowActions: ['DeleteApplication'] })
+  deleteApplication(): void {
+    this.assertSenderIsCreator();
+
+    // Ensure all funds have been withdrawn
+    if (this.totalEscrowedAmount.value > 0n) {
+      throw new Error('Cannot delete application while funds are still escrowed. All bidders must withdraw first.');
+    }
+
+    // Ensure auction is not active
+    if (this.isEscrowActive.value) {
+      throw new Error('Cannot delete active auction. Cancel auction first.');
+    }
+
+    // Close out asset position
+    this.sendAssetTransfer({
+      xferAsset: this.assetId.value,
+      assetReceiver: this.app.creator,
+      assetAmount: 0n,
+      assetCloseTo: this.app.creator,
+      fee: this.MIN_TXN_FEE,
+    });
+
+    // Close out ALGO balance
+    this.sendPayment({
+      receiver: this.app.creator,
+      amount: 0n,
+      closeRemainderTo: this.app.creator,
+      fee: this.MIN_TXN_FEE,
+    });
+
+    this.log('Contract deleted, all assets returned to creator');
+  }
+
+  // --- Read-only View Methods ---
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getAuctionInfo(): [uint64, uint64, uint64, Address, uint64, boolean, boolean] {
+    return [
+      this.assetId.value,
+      this.floorPrice.value,
+      this.highestBid.value,
+      this.highestBidder.value,
+      this.auctionEndTime.value,
+      this.isEscrowActive.value,
+      this.assetEscrowed.value
+    ];
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getEscrowInfo(): [uint64, uint64] {
+    return [
+      this.totalEscrowedAmount.value,
+      this.activeBiddersCount.value
+    ];
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getBidderEscrow(bidder: Address): uint64 {
+    return this.bidderEscrows.get(bidder).value || 0n;
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getTimeRemaining(): uint64 {
+    if (this.txn.lastValid >= this.auctionEndTime.value) {
+      return 0n;
+    }
+    return this.auctionEndTime.value - this.txn.lastValid;
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  isAuctionEnded(): boolean {
+    return this.txn.lastValid > this.auctionEndTime.value;
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  canWithdraw(bidder: Address): boolean {
+    if (this.isEscrowActive.value) return false;
+    const escrowedAmount = this.bidderEscrows.get(bidder).value || 0n;
+    return escrowedAmount > 0n;
+  }
+
+  // --- Private Helper Methods ---
+
+  private endAuction(): void {
+    if (!this.isEscrowActive.value) {
+      throw new Error('Auction already ended');
+    }
+
+    if (this.highestBidder.value !== this.NO_BIDDER) {
+      const winningAmount = this.bidderEscrows.get(this.highestBidder.value).value || 0n;
+      
+      if (winningAmount === 0n) {
+        throw new Error('Invalid auction state: winner has no escrowed funds');
+      }
+
+      // Transfer asset to winner
+      this.sendAssetTransfer({
+        xferAsset: this.assetId.value,
+        assetReceiver: this.highestBidder.value,
+        assetAmount: 1n,
+        fee: this.MIN_TXN_FEE,
+      });
+
+      // Transfer winning bid to creator
       this.sendPayment({
         receiver: this.app.creator,
-        amount: 0,
-        closeRemainderTo: this.app.creator,
-        fee: 1000
+        amount: winningAmount,
+        fee: this.MIN_TXN_FEE,
       });
-    }
-  
-    // --- Private Utility Functions ---
-  
-    private endAuction(): void {
-      if (!this.isEscrowActive) {
-        throw new Error("Auction already ended");
-      }
-  
-      if (this.highestBidder.toString() !== this.NO_BIDDER.toString()) {
-        const winningAmount = this.bidderEscrows.get(this.highestBidder).value || 0;
-        
-        // Transfer asset to highest bidder
+
+      // Update state for the winner
+      this.bidderEscrows.delete(this.highestBidder.value);
+      this.totalEscrowedAmount.value -= winningAmount;
+      this.activeBiddersCount.value -= 1n;
+      this.assetEscrowed.value = false;
+
+      this.log(`Auction won by ${this.highestBidder.value} for ${winningAmount} microALGOs`);
+    } else {
+      // No bids - return asset to creator
+      if (this.assetEscrowed.value) {
         this.sendAssetTransfer({
-          xferAsset: this.assetId,
-          assetReceiver: this.highestBidder,
-          assetAmount: 1,
-          fee: 1000
+          xferAsset: this.assetId.value,
+          assetReceiver: this.app.creator,
+          assetAmount: 1n,
+          fee: this.MIN_TXN_FEE,
         });
-  
-        // Transfer winning bid to creator
-        this.sendPayment({
-          receiver: this.app.creator,
-          amount: winningAmount,
-          fee: 1000
-        });
-  
-        // Update state for the winner
-        this.bidderEscrows.delete(this.highestBidder);
-        this.totalEscrowedAmount -= winningAmount;
-        this.activeBiddersCount -= 1;
+        this.assetEscrowed.value = false;
       }
-  
-      // Deactivate escrow to allow all remaining (losing) bidders to withdraw their funds
-      this.isEscrowActive = false;
+      this.log('Auction ended with no bids');
     }
-  
-    private assertSenderIsCreator(): void {
-      if (this.txn.sender.toString() !== this.app.creator.toString()) {
-        throw new Error("Only the creator can perform this action");
-      }
+
+    // Deactivate escrow to allow remaining bidders to withdraw
+    this.isEscrowActive.value = false;
+  }
+
+  private assertSenderIsCreator(): void {
+    if (this.txn.sender !== this.app.creator) {
+      throw new Error('Only contract creator can perform this action');
     }
   }
+
+  private assertAuctionActive(): void {
+    if (!this.isEscrowActive.value || !this.assetEscrowed.value) {
+      throw new Error('Auction is not currently active');
+    }
+  }
+
+  private assertAuctionNotStarted(): void {
+    if (this.isEscrowActive.value) {
+      throw new Error('Cannot modify auction parameters after bidding has started');
+    }
+  }
+
+  private assertAuctionNotEnded(): void {
+    if (this.txn.lastValid > this.auctionEndTime.value) {
+      throw new Error('Auction has already ended');
+    }
+  }
+}
