@@ -10,38 +10,48 @@ async function createDummyAsset(client: AlgorandClient, creator: Account): Promi
     total: 1,
     decimals: 0,
   });
-  const assetId = Number(tx.confirmation?.assetIndex);
-  return assetId;
+  if (!tx.confirmation || tx.confirmation.assetIndex === undefined) {
+    throw new Error('Asset creation failed: no assetIndex in confirmation');
+  }
+  return Number(tx.confirmation.assetIndex);
 }
 
 export async function deployTimedAuction(): Promise<void> {
-  const algorand = AlgorandClient.fromEnvironment();
-  const deployer = await algorand.account.fromEnvironment('DEPLOYER');
+  // Setup client & deployer
+  const client = AlgorandClient.fromEnvironment();
+  const deployer = await client.account.fromEnvironment('DEPLOYER');
 
-  await algorand.fund.ensure(deployer, (1).algo());
+  // Ensure deployer has some funds
+  await client.fund.ensure(deployer, (1).algo());
 
-  const assetId = await createDummyAsset(algorand, deployer);
+  // Create the dummy asset
+  const assetId = await createDummyAsset(client, deployer);
 
+  // Setup the auction app client
   const auctionClient = new TimedAuctionClient(
     {
       sender: deployer,
       resolveBy: 'id',
-      id: 0,
+      id: 0,  // using new deployment
     },
-    algorand.client.algod
+    client.client.algod
   );
 
+  // Deploy the application (smart contract)
   const { appId, appAddress, transaction } = await auctionClient.create.createApplication({
     asset: assetId,
     floorPrice: (0.1).algo(),
     auctionDurationSeconds: 3600,
   });
 
-  await algorand.send.payment({
+  // After creation, fund the app address so it can hold ALGO for operations
+  await client.send.payment({
     amount: (1).algo(),
     sender: deployer.addr,
     receiver: appAddress,
   });
 
-  console.log(`TimedAuction deployed — App ID: ${appId}, App Address: ${appAddress}, TxID: ${transaction.txID()}`);
+  console.log(
+    `TimedAuction deployed: App ID = ${appId}, Address = ${appAddress}, TxID = ${transaction.txID()}`
+  );
 }
