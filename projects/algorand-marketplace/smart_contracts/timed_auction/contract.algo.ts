@@ -6,202 +6,322 @@ import {
   Asset,
   PaymentTxn,
   AssetTransferTxn,
+  GlobalStateKey,
+  GlobalStateValue,
 } from '@algorandfoundation/algorand-typescript';
 
 export class TimedAuctionContract extends Contract {
-  assetId: uint64;
-  floorPrice: uint64;
-  highestBid: uint64;
-  highestBidder: Address;
-  auctionEndTime: uint64;
-  assetEscrowed: boolean;
+  // State variables
+  assetId = GlobalStateKey<uint64>({ key: 'asset_id' });
+  floorPrice = GlobalStateKey<uint64>({ key: 'floor_price' });
+  highestBid = GlobalStateKey<uint64>({ key: 'highest_bid' });
+  highestBidder = GlobalStateKey<Address>({ key: 'highest_bidder' });
+  auctionEndTime = GlobalStateKey<uint64>({ key: 'auction_end' });
+  assetEscrowed = GlobalStateKey<boolean>({ key: 'asset_escrowed' });
+  auctionActive = GlobalStateKey<boolean>({ key: 'auction_active' });
 
-  private readonly NO_BIDDER = new Address(
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
-  );
-  private readonly TXN_FEE: uint64 = 1000n;
+  // Constants
+  private readonly NO_BIDDER = Address.zeroAddress;
+  private readonly MIN_TXN_FEE: uint64 = 1000n;
+  private readonly MIN_AUCTION_DURATION: uint64 = 300n; // 5 minutes minimum
+  private readonly MAX_AUCTION_DURATION: uint64 = 2592000n; // 30 days maximum
 
   @abimethod({ allowActions: ['NoOp'], onCreate: 'require' })
-  createApplication(asset: Asset, floorPrice: uint64, auctionDurationSeconds: uint64): void {
-    this.assetId = asset.id;
-    this.floorPrice = floorPrice;
-    this.highestBid = 0n;
-    this.highestBidder = this.NO_BIDDER;
-    this.assetEscrowed = false;
+  createApplication(
+    asset: Asset, 
+    floorPrice: uint64, 
+    auctionDurationSeconds: uint64
+  ): void {
+    // Validate inputs
+    if (floorPrice === 0n) {
+      throw new Error('Floor price must be greater than 0');
+    }
+    
+    if (auctionDurationSeconds < this.MIN_AUCTION_DURATION) {
+      throw new Error(`Auction duration must be at least ${this.MIN_AUCTION_DURATION} seconds`);
+    }
+    
+    if (auctionDurationSeconds > this.MAX_AUCTION_DURATION) {
+      throw new Error(`Auction duration cannot exceed ${this.MAX_AUCTION_DURATION} seconds`);
+    }
 
-    const seconds = Number(auctionDurationSeconds);
-    const roundsToAdd = BigInt(Math.ceil(seconds / 4.5));
-    this.auctionEndTime = this.txn.lastValid + roundsToAdd;
+    // Initialize state
+    this.assetId.value = asset.id;
+    this.floorPrice.value = floorPrice;
+    this.highestBid.value = 0n;
+    this.highestBidder.value = this.NO_BIDDER;
+    this.assetEscrowed.value = false;
+    this.auctionActive.value = false;
 
-    this.log(`Auction created: assetId=${asset.id}, floorPrice=${floorPrice}, ends at ${this.auctionEndTime}`);
+    // Calculate end time (assuming 4.5 second block time)
+    const roundsToAdd = BigInt(Math.ceil(Number(auctionDurationSeconds) / 4.5));
+    this.auctionEndTime.value = this.txn.lastValid + roundsToAdd;
+
+    this.log(`Auction created: assetId=${asset.id}, floorPrice=${floorPrice}, duration=${auctionDurationSeconds}s`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
-  setFloorPrice(newPrice: uint64): void {
+  updateFloorPrice(newPrice: uint64): void {
     this.assertSenderIsCreator();
-    this.floorPrice = newPrice;
+    this.assertAuctionNotStarted();
+    
+    if (newPrice === 0n) {
+      throw new Error('Floor price must be greater than 0');
+    }
+    
+    this.floorPrice.value = newPrice;
     this.log(`Floor price updated to ${newPrice}`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
-  optInToAsset(payment: PaymentTxn): void {
+  optInToAsset(mbr_payment: PaymentTxn): void {
     this.assertSenderIsCreator();
-    if (this.app.address.isOptedInToAsset(this.assetId)) {
-      throw new Error("Already opted in to asset");
+    
+    if (this.app.address.isOptedInToAsset(this.assetId.value)) {
+      throw new Error('Contract already opted into asset');
     }
-    const requiredMin = this.app.minBalance + this.app.assetOptInMinBalance;
-    if (payment.receiver !== this.app.address || payment.amount < requiredMin) {
-      throw new Error("Invalid payment for opt-in");
+
+    // Verify MBR payment
+    const requiredMBR = this.app.minBalance + this.app.assetOptInMinBalance;
+    if (mbr_payment.receiver !== this.app.address || mbr_payment.amount < requiredMBR) {
+      throw new Error(`Invalid MBR payment. Required: ${requiredMBR}`);
     }
+
+    // Opt into the asset
     this.sendAssetTransfer({
-      xferAsset: this.assetId,
+      xferAsset: this.assetId.value,
       assetReceiver: this.app.address,
       assetAmount: 0n,
     });
-    this.log(`Opted into asset ${this.assetId}`);
+
+    this.log(`Opted into asset ${this.assetId.value}`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
-  escrowAsset(txn: AssetTransferTxn): void {
+  escrowAsset(asset_txn: AssetTransferTxn): void {
     this.assertSenderIsCreator();
-    if (this.assetEscrowed) {
-      throw new Error("Asset already escrowed");
+    
+    if (this.assetEscrowed.value) {
+      throw new Error('Asset already escrowed');
     }
-    const valid =
-      txn.assetReceiver === this.app.address &&
-      txn.xferAsset === this.assetId &&
-      txn.assetAmount === 1n;
-    if (!valid) {
-      throw new Error("Must send exactly one unit of asset to escrow");
+
+    // Validate asset transfer
+    if (asset_txn.assetReceiver !== this.app.address ||
+        asset_txn.xferAsset !== this.assetId.value ||
+        asset_txn.assetAmount !== 1n) {
+      throw new Error('Must transfer exactly 1 unit of the auction asset');
     }
-    this.assetEscrowed = true;
-    this.log(`Asset escrowed: ${this.assetId}`);
+
+    this.assetEscrowed.value = true;
+    this.auctionActive.value = true;
+    
+    this.log(`Asset ${this.assetId.value} escrowed and auction activated`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
-  placeBid(bidPayment: PaymentTxn): void {
-    if (!this.assetEscrowed) {
-      throw new Error("Asset not escrowed");
+  placeBid(bid_payment: PaymentTxn): void {
+    this.assertAuctionActive();
+    this.assertAuctionNotEnded();
+    
+    // Prevent creator from bidding
+    if (this.txn.sender === this.app.creator) {
+      throw new Error('Contract creator cannot place bids');
     }
-    if (this.txn.lastValid > this.auctionEndTime) {
-      throw new Error("Auction ended");
+
+    // Validate bid payment
+    if (bid_payment.sender !== this.txn.sender || 
+        bid_payment.receiver !== this.app.address) {
+      throw new Error('Invalid bid payment transaction');
     }
-    if (this.txn.sender.toString() === this.app.creator.toString()) {
-      throw new Error("Creator cannot bid");
+
+    // Check minimum bid requirements
+    if (bid_payment.amount < this.floorPrice.value) {
+      throw new Error(`Bid must meet floor price of ${this.floorPrice.value}`);
     }
-    if (bidPayment.sender !== this.txn.sender || bidPayment.receiver !== this.app.address) {
-      throw new Error("Invalid bid payment");
+
+    if (bid_payment.amount <= this.highestBid.value) {
+      throw new Error(`Bid must exceed current highest bid of ${this.highestBid.value}`);
     }
-    if (bidPayment.amount < this.floorPrice) {
-      throw new Error(`Bid below floor price ${this.floorPrice}`);
-    }
-    if (bidPayment.amount <= this.highestBid) {
-      throw new Error(`Bid must exceed current highest ${this.highestBid}`);
-    }
+
+    // Refund previous highest bidder if exists
     if (this.hasValidBid()) {
       this.sendPayment({
-        receiver: this.highestBidder,
-        amount: this.highestBid,
-        fee: this.TXN_FEE,
+        receiver: this.highestBidder.value,
+        amount: this.highestBid.value,
+        fee: this.MIN_TXN_FEE,
       });
+      this.log(`Refunded previous bidder ${this.highestBidder.value}: ${this.highestBid.value}`);
     }
-    this.highestBid = bidPayment.amount;
-    this.highestBidder = this.txn.sender;
-    this.log(`New highest bid: ${this.highestBid} by ${this.highestBidder}`);
+
+    // Update auction state
+    this.highestBid.value = bid_payment.amount;
+    this.highestBidder.value = this.txn.sender;
+
+    this.log(`New highest bid: ${bid_payment.amount} by ${this.txn.sender}`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
   finalizeAuction(): void {
-    if (this.txn.lastValid <= this.auctionEndTime) {
-      throw new Error("Auction not yet ended");
+    this.assertAuctionActive();
+    
+    if (this.txn.lastValid <= this.auctionEndTime.value) {
+      throw new Error('Auction has not yet ended');
     }
+
     if (!this.hasValidBid()) {
-      throw new Error("No bids");
+      throw new Error('No valid bids to finalize');
     }
-    this.sendAssetTransfer({
-      xferAsset: this.assetId,
-      assetReceiver: this.highestBidder,
-      assetAmount: 1n,
-      fee: this.TXN_FEE,
-    });
-    this.sendPayment({
-      receiver: this.app.creator,
-      amount: this.highestBid,
-      fee: this.TXN_FEE,
-    });
-    this.resetAuction();
-    this.log(`Auction finalized: asset → ${this.highestBidder}, creator paid ${this.highestBid}`);
+
+    this.executeAuctionSettlement();
+    this.log(`Auction finalized: Winner ${this.highestBidder.value}, Amount ${this.highestBid.value}`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
   acceptBid(): void {
     this.assertSenderIsCreator();
+    this.assertAuctionActive();
+    
     if (!this.hasValidBid()) {
-      throw new Error("No bid to accept");
+      throw new Error('No bid available to accept');
     }
-    this.sendAssetTransfer({
-      xferAsset: this.assetId,
-      assetReceiver: this.highestBidder,
-      assetAmount: 1n,
-      fee: this.TXN_FEE,
-    });
-    this.sendPayment({
-      receiver: this.app.creator,
-      amount: this.highestBid,
-      fee: this.TXN_FEE,
-    });
-    this.resetAuction();
-    this.log(`Bid accepted: ${this.highestBid} from ${this.highestBidder}`);
+
+    this.executeAuctionSettlement();
+    this.log(`Bid accepted early: ${this.highestBid.value} from ${this.highestBidder.value}`);
   }
 
   @abimethod({ allowActions: ['NoOp'] })
-  rejectBid(): void {
+  cancelAuction(): void {
     this.assertSenderIsCreator();
-    if (!this.hasValidBid()) {
-      throw new Error("No bid to reject");
+    this.assertAuctionActive();
+
+    // Refund highest bidder if exists
+    if (this.hasValidBid()) {
+      this.sendPayment({
+        receiver: this.highestBidder.value,
+        amount: this.highestBid.value,
+        fee: this.MIN_TXN_FEE,
+      });
     }
-    this.sendPayment({
-      receiver: this.highestBidder,
-      amount: this.highestBid,
-      fee: this.TXN_FEE,
+
+    // Return asset to creator
+    this.sendAssetTransfer({
+      xferAsset: this.assetId.value,
+      assetReceiver: this.app.creator,
+      assetAmount: 1n,
+      fee: this.MIN_TXN_FEE,
     });
-    this.resetAuction();
-    this.log(`Bid rejected: ${this.highestBid} refunded`);
+
+    this.resetAuctionState();
+    this.log('Auction cancelled and asset returned to creator');
   }
 
   @abimethod({ allowActions: ['DeleteApplication'] })
   deleteApplication(): void {
     this.assertSenderIsCreator();
+
+    // Ensure no active auction
+    if (this.auctionActive.value && this.hasValidBid()) {
+      throw new Error('Cannot delete contract with active bids. Cancel auction first.');
+    }
+
+    // Close out asset position and return any remaining balance
     this.sendAssetTransfer({
-      xferAsset: this.assetId,
+      xferAsset: this.assetId.value,
       assetReceiver: this.app.creator,
       assetAmount: 0n,
       assetCloseTo: this.app.creator,
-      fee: this.TXN_FEE,
+      fee: this.MIN_TXN_FEE,
     });
+
+    // Close out ALGO balance
     this.sendPayment({
       receiver: this.app.creator,
       amount: 0n,
       closeRemainderTo: this.app.creator,
-      fee: this.TXN_FEE,
+      fee: this.MIN_TXN_FEE,
     });
-    this.log("Contract deleted, assets reclaimed");
+
+    this.log('Contract deleted and all assets returned to creator');
   }
 
-  private resetAuction(): void {
-    this.highestBid = 0n;
-    this.highestBidder = this.NO_BIDDER;
-    this.assetEscrowed = false;
-    this.auctionEndTime = 0n;
+  // View methods
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getAuctionInfo(): [uint64, uint64, uint64, Address, uint64, boolean] {
+    return [
+      this.assetId.value,
+      this.floorPrice.value,
+      this.highestBid.value,
+      this.highestBidder.value,
+      this.auctionEndTime.value,
+      this.auctionActive.value
+    ];
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  getTimeRemaining(): uint64 {
+    if (this.txn.lastValid >= this.auctionEndTime.value) {
+      return 0n;
+    }
+    return this.auctionEndTime.value - this.txn.lastValid;
+  }
+
+  @abimethod({ allowActions: ['NoOp'], readonly: true })
+  isAuctionEnded(): boolean {
+    return this.txn.lastValid > this.auctionEndTime.value;
+  }
+
+  // Private helper methods
+  private executeAuctionSettlement(): void {
+    // Transfer asset to winner
+    this.sendAssetTransfer({
+      xferAsset: this.assetId.value,
+      assetReceiver: this.highestBidder.value,
+      assetAmount: 1n,
+      fee: this.MIN_TXN_FEE,
+    });
+
+    // Pay creator
+    this.sendPayment({
+      receiver: this.app.creator,
+      amount: this.highestBid.value,
+      fee: this.MIN_TXN_FEE,
+    });
+
+    this.resetAuctionState();
+  }
+
+  private resetAuctionState(): void {
+    this.highestBid.value = 0n;
+    this.highestBidder.value = this.NO_BIDDER;
+    this.assetEscrowed.value = false;
+    this.auctionActive.value = false;
   }
 
   private assertSenderIsCreator(): void {
-    if (this.txn.sender.toString() !== this.app.creator.toString()) {
-      throw new Error("Only creator allowed");
+    if (this.txn.sender !== this.app.creator) {
+      throw new Error('Only contract creator can perform this action');
+    }
+  }
+
+  private assertAuctionActive(): void {
+    if (!this.assetEscrowed.value || !this.auctionActive.value) {
+      throw new Error('Auction is not currently active');
+    }
+  }
+
+  private assertAuctionNotStarted(): void {
+    if (this.auctionActive.value) {
+      throw new Error('Cannot modify auction after it has started');
+    }
+  }
+
+  private assertAuctionNotEnded(): void {
+    if (this.txn.lastValid > this.auctionEndTime.value) {
+      throw new Error('Auction has already ended');
     }
   }
 
   private hasValidBid(): boolean {
-    return this.highestBidder.toString() !== this.NO_BIDDER.toString();
+    return this.highestBidder.value !== this.NO_BIDDER && this.highestBid.value > 0n;
   }
 }
